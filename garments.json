@@ -1,0 +1,10 @@
+{
+  "trainer": {
+    "name": "長袖トレーナー（見本）",
+    "chest_cm": 58,
+    "shoulder_cm": 50,
+    "length_cm": 67,
+    "anchor": "shoulder_center",
+    "px_chest_hint": null
+  }
+}
