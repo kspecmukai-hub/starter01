@@ -160,7 +160,7 @@
     /* 推奨係数（位置/スケール/回転） */
     const ONEURO_POS   = { mincutoff:1.2, beta:0.020, dcutoff:1.0 };
     const ONEURO_SCALE = { mincutoff:1.0, beta:0.010, dcutoff:1.0 };
-    const ONEURO_ROT   = { mincutoff:1.4, beta:0.025, dcutoff:1.0 };
+    const ONEURO_ROT   = { mincutoff:1.2, beta:0.015, dcutoff:1.0 }; // ←緩め
 
     const euroX = new OneEuro(ONEURO_POS.mincutoff,   ONEURO_POS.beta,   ONEURO_POS.dcutoff);
     const euroY = new OneEuro(ONEURO_POS.mincutoff,   ONEURO_POS.beta,   ONEURO_POS.dcutoff);
@@ -179,7 +179,8 @@
     const HOLD_MS       = 600;   // 一時未検出ホールド
     const ANCHOR_Y_FRAC = 0.33;  // 肩ライン（ご指定値）
     const DROP_K        = 0.14;  // 肩幅に対するドロップ割合
-    const ROT_MAX_DEG   = 8;     // 回転の上限（±度）
+    const ROT_MAX_DEG   = 6;     // ←上限を下げて穏やかに
+    const ROT_GAIN      = 0.6;   // ←肩角度に対する回転比率
 
     /* ========= 状態 ========= */
     let stream=null, currentDeviceId=null, facing='user', mirror=true;
@@ -302,13 +303,13 @@
       const smX  = euroX.filter(rawX, t);
       const smY  = euroY.filter(rawY, t);
 
-      // 回転：肩ライン角度 → deg（ミラー時は見た目に合わせて反転）
+      // 回転：肩ライン角度 → deg（ゲイン & クランプ & OneEuro）
       let deg = 0;
       if(updateGarmentTransform._shoulderAngleRad!=null){
-        const visDeg = updateGarmentTransform._shoulderAngleRad * 180/Math.PI * (mirror ? -1 : 1);
-        // クランプ
-        deg = Math.max(-ROT_MAX_DEG, Math.min(ROT_MAX_DEG, visDeg));
-        deg = euroR.filter(deg, t);
+        let visDeg = updateGarmentTransform._shoulderAngleRad * 180/Math.PI * (mirror ? -1 : 1);
+        visDeg *= ROT_GAIN; // ←緩く
+        visDeg = Math.max(-ROT_MAX_DEG, Math.min(ROT_MAX_DEG, visDeg)); // クランプ
+        deg = euroR.filter(visDeg, t);
       }
 
       // 描画寸法
@@ -350,7 +351,7 @@
             if(mirror){ cx = W - cx; } // 見た目に合わせる（位置）
             const shoulderPX = Math.abs(R.x - L.x) * W;
 
-            // 肩ライン角度（rad）：画面の左→右、上→下基準
+            // 肩ライン角度（rad）
             const dx = (R.x - L.x) * W;
             const dy = (R.y - L.y) * H;
             updateGarmentTransform._shoulderAngleRad = Math.atan2(dy, dx);
