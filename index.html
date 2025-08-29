@@ -15,24 +15,19 @@
     /* ステージ（全画面カメラ） */
     #stage{ position:relative; width:100vw; height:100vh; overflow:hidden; background:#000 }
     #video{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; background:#000; }
-    .mirror{ transform: scaleX(-1); } /* 見た目の左右反転 */
+    .mirror{ transform: scaleX(-1); } /* 表示だけ左右反転 */
 
-    /* 服PNG（追従表示用） */
+    /* 服PNG（追従対象） */
     #garment{
       position:absolute; left:50%; top:50%;
       transform:translate(-50%,-50%);
-      /* max-width:90vmin;  ←★削除：サイズが頭打ちになる原因 */
-      display:none; pointer-events:none;
-      opacity:0; transition: opacity .22s ease;
-      will-change: left, top, width, opacity;
+      max-width:90vmin; display:none; pointer-events:none;
+      opacity:0; transition:opacity .18s ease;
     }
 
-    /* スタート画面（カメラ許可） */
+    /* スタート画面 */
     #startScreen{ position:absolute; inset:0; display:grid; place-items:center; background:rgba(0,0,0,.55); }
-    #startCard{
-      background:#111; color:#eaeaea; padding:24px 28px; border-radius:16px;
-      width:min(92vw,520px); box-shadow:0 8px 32px rgba(0,0,0,.35);
-    }
+    #startCard{ background:#111; color:#eaeaea; padding:24px 28px; border-radius:16px; width:min(92vw,520px); box-shadow:0 8px 32px rgba(0,0,0,.35); }
     #startCard h1{ margin:0 0 10px; font-size:22px; }
     #startCard p{ margin:10px 0 14px; line-height:1.7; opacity:.9; }
     .btn{ appearance:none; border:0; border-radius:10px; padding:12px 16px; font-weight:700; cursor:pointer; }
@@ -56,11 +51,9 @@
     /* 浮遊ボタン */
     #toggle{
       position:absolute; right:20px; bottom:20px; width:48px; height:48px; border-radius:50%;
-      display:grid; place-items:center; background:#10b981; color:#002; font-weight:800; cursor:pointer;
-      box-shadow:0 6px 24px rgba(0,0,0,.35);
+      display:grid; place-items:center; background:#10b981; color:#002; font-weight:800; cursor:pointer; box-shadow:0 6px 24px rgba(0,0,0,.35);
     }
 
-    /* 小さめ端末の微調整 */
     @media (max-width:420px){
       #panel{ right:12px; bottom:76px; }
       #startCard{ padding:20px; border-radius:12px; }
@@ -72,17 +65,15 @@
     <video id="video" autoplay playsinline muted></video>
     <img id="garment" alt="garment" src="public/garments/trainer.png" />
 
-    <!-- スタート -->
     <div id="startScreen">
       <div id="startCard">
         <h1>カメラの準備をします</h1>
         <p>「カメラを開始」を押すと、ブラウザからカメラ許可を聞かれます。<br>インカメで開始し、ミラー表示（左右反転）になります。</p>
         <button id="startBtn" class="btn primary">カメラを開始</button>
-        <p class="hint">※ 右下の⚙で「アウト/ミラーOFF」へ切替できます。</p>
+        <p class="hint">※ 右下の⚙で「アウト／ミラーOFF」へ切替できます。</p>
       </div>
     </div>
 
-    <!-- 設定 -->
     <div id="panel" role="dialog" aria-modal="false" aria-label="設定">
       <h2>設定</h2>
 
@@ -92,42 +83,42 @@
       </div>
 
       <div class="row">
-        <label>ミラー</label>
+        <label for="mirrorChk">ミラー</label>
         <input id="mirrorChk" type="checkbox" checked />
       </div>
 
       <div class="row">
-        <label>デバイス</label>
+        <label for="devicesSel">デバイス</label>
         <select id="devicesSel"></select>
       </div>
 
       <div class="row">
-        <label>オート調整</label>
+        <label for="autoFitChk">オート調整</label>
         <input id="autoFitChk" type="checkbox" checked />
       </div>
 
       <div class="row">
-        <label>フィット保護調整</label>
-        <input id="fitGain" type="range" min="0" max="100" value="100" />
+        <label for="fitGain">フィット保護調整</label>
+        <input id="fitGain" type="range" min="0" max="100" value="85" />
       </div>
 
       <div class="row">
-        <label>横位置（微調整）</label>
+        <label for="offX">横位置（微調整）</label>
         <input id="offX" type="range" min="-80" max="80" value="0" />
       </div>
       <div class="row">
-        <label>縦位置（微調整）</label>
+        <label for="offY">縦位置（微調整）</label>
         <input id="offY" type="range" min="-120" max="120" value="0" />
       </div>
 
       <div class="row">
-        <label>サイズ（手動）</label>
+        <label for="scale">サイズ（手動）</label>
         <input id="scale" type="range" min="30" max="150" value="100" />
       </div>
 
       <div class="row">
         <label>肩検出</label>
-        <span id="poseState" style="font-size:12px;background:#0a0; color:#021; border-radius:10px; padding:4px 6px; text-align:center">検出中</span>
+        <span id="poseState" style="font-size:12px;background:#0a0; color:#021; border-radius:10px; padding:4px 6px; text-align:center">未検出</span>
       </div>
 
       <div class="row">
@@ -135,65 +126,44 @@
         <button id="restartBtn" class="btn ghost">再起動</button>
       </div>
 
-      <p class="hint">肩/腕が入る状態だと自動で表示（見失っても少し保持）。検出できない環境では手動サイズ調整のみ効きます。</p>
+      <p class="hint">肩/腕が入る状態だと自動で表示。検出できない環境では非表示になります。</p>
     </div>
 
     <button id="toggle" title="設定">⚙</button>
   </div>
 
-  <!-- ===== Script ===== -->
   <script type="module">
-    /**** MediaPipe (ローカルESM) の読込 ****/
+    /**** MediaPipe (ローカルESM) ****/
     import * as vision from './vendor/mediapipe/vision_bundle.mjs';
     const WASM_BASE = './vendor/mediapipe/wasm/';
 
-    /**** 要素参照 ****/
+    /**** 要素 ****/
     const els = {
-      stage: document.getElementById('stage'),
-      video: document.getElementById('video'),
-      garment: document.getElementById('garment'),
-      startScreen: document.getElementById('startScreen'),
-      startBtn: document.getElementById('startBtn'),
-      toggle: document.getElementById('toggle'),
-      panel: document.getElementById('panel'),
-      modeBtn: document.getElementById('modeBtn'),
-      mirrorChk: document.getElementById('mirrorChk'),
-      devicesSel: document.getElementById('devicesSel'),
-      autoFitChk: document.getElementById('autoFitChk'),
-      fitGain: document.getElementById('fitGain'),
-      offX: document.getElementById('offX'),
-      offY: document.getElementById('offY'),
-      scale: document.getElementById('scale'),
-      poseState: document.getElementById('poseState'),
-      stopBtn: document.getElementById('stopBtn'),
-      restartBtn: document.getElementById('restartBtn'),
+      stage: stage, video: video, garment: garment,
+      startScreen: startScreen, startBtn: startBtn,
+      toggle: toggle, panel: panel, modeBtn: modeBtn, mirrorChk: mirrorChk, devicesSel: devicesSel,
+      autoFitChk: autoFitChk, fitGain: fitGain, offX: offX, offY: offY, scale: scale,
+      poseState: poseState, stopBtn: stopBtn, restartBtn: restartBtn,
     };
 
-    /**** 調整パラメータ ****/
-    const ALPHA_POS   = 0.16;   // 位置スムージング
-    const ALPHA_SCALE = 0.12;   // スケールスムージング
-    const HOLD_MS     = 600;    // 一時未検出ホールド（見失っても少し保持）
-    const ANCHOR_Y_FRAC = 0.28; // 服画像内の肩ライン（0=上端〜1=下端）
-    const DROP_K      = 0.14;   // 肩幅pxに対するドロップ割合
+    /**** 調整パラメータ（応答性UP版） ****/
+    const ALPHA_POS      = 0.20;  // 位置のスムージング
+    const ALPHA_SCALE    = 0.28;  // スケールのスムージング（距離変化の反映を速く）
+    const ALPHA_SHOULDER = 0.35;  // 肩幅pxのスムージング
+    const HOLD_MS        = 80;    // 未検出保持（短め＝すぐ消える）
+    const ANCHOR_Y_FRAC  = 0.28;  // 服画像内の肩ライン（0=上端〜1=下端）
+    const DROP_K         = 0.14;  // 肩幅に対する自然な下げ量（ドロップ）
 
     /**** 状態 ****/
-    let stream = null;
-    let currentDeviceId = null;
-    let facing = 'user'; // 'user'|'environment'
-    let mirror = true;
-    let landmarker = null;
-    let fileset = null;
-
-    let lastDetMS = 0;
-    let smX=null, smY=null, smS=1;
-    let manualScale = 1;
-
-    let garmentNatW=0, garmentNatH=0;
-    let garmentConf = null; // garments.json から
-    let autoDropPx = 0;     // 肩幅に比例したドロップ量(px)
+    let stream=null, currentDeviceId=null, facing='user', mirror=true;
+    let landmarker=null, fileset=null;
+    let lastDetMS=0, smX=null, smY=null, smS=1, smShoulder=null;
+    let manualScale=1;
+    let garmentNatW=0, garmentNatH=0, garmentConf=null;
+    let autoDropPx=0;
 
     els.garment.addEventListener('load', ()=>{
-      garmentNatW = els.garment.naturalWidth || els.garment.width || 1000;
+      garmentNatW = els.garment.naturalWidth  || els.garment.width  || 1000;
       garmentNatH = els.garment.naturalHeight || els.garment.height || 1000;
     });
 
@@ -204,10 +174,7 @@
     async function listVideoDevices(){
       const devices = await navigator.mediaDevices.enumerateDevices();
       const cams = devices.filter(d=>d.kind==='videoinput');
-      els.devicesSel.innerHTML = cams.map(d=>{
-        const sel = d.deviceId===currentDeviceId ? 'selected':'';
-        return `<option value="${d.deviceId}" ${sel}>${d.label||'Camera'}</option>`;
-      }).join('');
+      els.devicesSel.innerHTML = cams.map(d=>`<option value="${d.deviceId}" ${d.deviceId===currentDeviceId?'selected':''}>${d.label||'Camera'}</option>`).join('');
     }
 
     function applyMirror(){
@@ -219,18 +186,13 @@
       try{
         if(stream){ stream.getTracks().forEach(t=>t.stop()); }
 
-        const constraints = {
-          audio:false,
-          video:{ facingMode:facing, width:{ideal:1280}, height:{ideal:720} }
-        };
+        const constraints = { audio:false, video:{ facingMode:facing, width:{ideal:1280}, height:{ideal:720} } };
         if(currentDeviceId) constraints.video.deviceId = { exact: currentDeviceId };
 
         stream = await navigator.mediaDevices.getUserMedia(constraints);
-        els.video.srcObject = stream;
-        await els.video.play().catch(()=>{});
-        await listVideoDevices();
+        els.video.srcObject = stream; await els.video.play().catch(()=>{});
         els.startScreen.style.display = 'none';
-        applyMirror();
+        await listVideoDevices(); applyMirror();
 
         if(!landmarker){ await initPose(); }
         requestAnimationFrame(tick);
@@ -239,10 +201,7 @@
         alert('カメラの開始に失敗しました。ブラウザの許可設定をご確認ください。');
       }
     }
-
-    async function stopCamera(){
-      if(stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; }
-    }
+    async function stopCamera(){ if(stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; } }
     async function restartCamera(){ await stopCamera(); await sleep(50); await startCamera(); }
 
     /**** Pose 初期化 ****/
@@ -250,9 +209,9 @@
       try{
         fileset = await vision.FilesetResolver.forVisionTasks(WASM_BASE);
         landmarker = await vision.PoseLandmarker.createFromOptions(fileset, {
-          baseOptions: { modelAssetPath: `${WASM_BASE}pose_landmarker_lite.task` },
-          runningMode: 'VIDEO', numPoses:1,
-          minPoseDetectionConfidence:0.5, minPosePresenceConfidence:0.5, minTrackingConfidence:0.5,
+          baseOptions:{ modelAssetPath:`${WASM_BASE}pose_landmarker_lite.task` },
+          runningMode:'VIDEO', numPoses:1,
+          minPoseDetectionConfidence:.5, minPosePresenceConfidence:.5, minTrackingConfidence:.5,
         });
         console.info('Pose 初期化 OK');
       }catch(e){
@@ -261,69 +220,65 @@
       }
     }
 
-    /**** garments.json 読込（px_chest_hint 反映） ****/
+    /**** garments.json 読込 ****/
     async function loadGarmentConfig(){
       try{
         const r = await fetch('garments.json',{cache:'no-store'});
         const data = await r.json();
         const firstKey = Object.keys(data)[0];
         garmentConf = data[firstKey] || null;
-      }catch(e){
-        console.warn('garments.json 読込失敗:', e);
-      }
+      }catch(e){ console.warn('garments.json 読込失敗:', e); }
     }
 
-    /**** 自動フィット＋描画 ****/
+    /**** 服の変換を適用 ****/
     function updateGarmentTransform(){
-      if(garmentNatW===0 || !garmentConf) return;
+      if(!garmentConf || garmentNatW===0) return;
 
       const baseScale = manualScale;
       let s = baseScale;
 
-      // 自動フィット：肩幅→胸幅推定→px_chest_hint へ合わせる
+      // 自動フィット（肩幅→胸幅推定→px_chest_hint に合わせる）
       if(els.autoFitChk.checked && updateGarmentTransform._shoulderPX){
-        const pxChestHint = garmentConf.px_chest_hint || 980; // natural(=1.0) での胸幅px
+        const pxChestHint = garmentConf.px_chest_hint || 980;
         let targetChestPx = updateGarmentTransform._shoulderPX;
         if(garmentConf.chest_cm && garmentConf.shoulder_cm){
-          targetChestPx = updateGarmentTransform._shoulderPX * (garmentConf.chest_cm/garmentConf.shoulder_cm);
+          targetChestPx = targetChestPx * (garmentConf.chest_cm/garmentConf.shoulder_cm);
         }
-        const autoS = (pxChestHint>0) ? (targetChestPx / pxChestHint) : baseScale;
-        const g = (parseInt(els.fitGain.value,10) || 100)/100; // 100%=自動に寄せる
-        s = lerp(baseScale, autoS, g);
+        const fitS = (pxChestHint>0) ? (targetChestPx/pxChestHint) : baseScale;
+        const g = (parseInt(els.fitGain.value,10) || 85)/100; // 0〜1
+        s = lerp(baseScale, fitS, g);
       }
 
       // スムージング
-      smS = smS==null ? s : lerp(smS, s, ALPHA_SCALE);
+      smS = (smS==null) ? s : lerp(smS, s, ALPHA_SCALE);
 
       // 位置（肩の中心）
       const cx = updateGarmentTransform._cx ?? (els.stage.clientWidth/2);
       const cy = updateGarmentTransform._cy ?? (els.stage.clientHeight/2);
+      smX = (smX==null) ? cx : lerp(smX, cx, ALPHA_POS);
+      smY = (smY==null) ? cy : lerp(smY, cy, ALPHA_POS);
 
-      smX = smX==null ? cx : lerp(smX, cx, ALPHA_POS);
-      smY = smY==null ? cy : lerp(smY, cy, ALPHA_POS);
-
+      // 実サイズ
       const w = garmentNatW * smS;
       const h = garmentNatH * smS;
 
-      // 肩ライン（ANCHOR_Y_FRAC）を smY（＋ドロップ）に一致させる
-      const desiredY = smY + autoDropPx;                  // 肩の世界座標
-      const anchorOffset = (0.5 - ANCHOR_Y_FRAC) * h;     // センター→肩ラインへの補正
+      // 服画像の肩ライン（上=0 下=1）→ 肩を基準に配置
+      const anchorOffset = (0.5 - ANCHOR_Y_FRAC) * h;
 
+      // 手動オフセット
       const offX = parseInt(els.offX.value,10) || 0;
       const offY = parseInt(els.offY.value,10) || 0;
 
       els.garment.style.width = `${w}px`;
       els.garment.style.left  = `${smX + offX}px`;
-      els.garment.style.top   = `${desiredY + anchorOffset + offY}px`;
+      els.garment.style.top   = `${smY + anchorOffset + autoDropPx + offY}px`;
     }
 
     /**** メインループ ****/
     async function tick(){
       if(!landmarker || !els.video || !els.video.videoWidth){ requestAnimationFrame(tick); return; }
 
-      const W = els.stage.clientWidth;
-      const H = els.stage.clientHeight;
-
+      const W = els.stage.clientWidth, H = els.stage.clientHeight;
       const now = performance.now();
       let ok=false;
 
@@ -335,32 +290,29 @@
           if(L && R){
             let cx = (L.x + R.x)/2 * W;
             let cy = (L.y + R.y)/2 * H;
-            if(mirror){ cx = W - cx; }  // 見た目に合わせる
+            if(mirror){ cx = W - cx; }
 
-            // 肩幅px
-            const shoulderPX = Math.abs(R.x - L.x) * W;
-            updateGarmentTransform._shoulderPX = shoulderPX;
+            // 肩幅(px)をスムージング
+            const shoulderPX_raw = Math.abs(R.x - L.x) * W;
+            smShoulder = (smShoulder==null) ? shoulderPX_raw : lerp(smShoulder, shoulderPX_raw, ALPHA_SHOULDER);
+            updateGarmentTransform._shoulderPX = smShoulder;
 
-            // ドロップ量（肩幅に比例して下げる）
-            autoDropPx = shoulderPX * DROP_K;
+            // ドロップ量（肩幅に比例）
+            autoDropPx = smShoulder * DROP_K;
 
             updateGarmentTransform._cx = cx;
             updateGarmentTransform._cy = cy;
 
-            lastDetMS = now;
-            ok=true;
+            lastDetMS = now; ok = true;
           }
         }
-      }catch(e){
-        console.warn('pose detect error:', e);
-      }
+      }catch(e){ console.warn('pose detect error:', e); }
 
-      // 表示制御（自動のみ）：検出中 or 直近なら表示
+      // 服の表示制御（自動のみ）
       const hold = (now - lastDetMS) < HOLD_MS;
-      const wantShow = ok || hold;
+      const wantShow = (ok || hold);
       els.garment.style.display = wantShow ? 'block' : 'none';
       els.garment.style.opacity = wantShow ? '1' : '0';
-      els.garment.toggleAttribute('hidden', !wantShow); // 念のため
 
       els.poseState.textContent = ok ? '検出中' : (hold ? '保持中' : '未検出');
       els.poseState.style.background = ok ? '#0a0' : (hold ? '#996600' : '#555');
@@ -369,14 +321,14 @@
       requestAnimationFrame(tick);
     }
 
-    /**** イベント類 ****/
+    /**** イベント ****/
     els.toggle.addEventListener('click', ()=> els.panel.classList.toggle('open'));
 
     els.modeBtn.addEventListener('click', async ()=>{
       facing = (facing==='user') ? 'environment' : 'user';
       mirror = (facing==='user'); applyMirror();
       els.mirrorChk.checked = mirror;
-      els.modeBtn.textContent = facing==='user' ? 'イン（ミラーON）に起動中' : 'アウト（ミラーOFF）に起動中';
+      els.modeBtn.textContent = (facing==='user') ? 'イン（ミラーON）に起動中' : 'アウト（ミラーOFF）に起動中';
       await restartCamera();
     });
 
@@ -394,6 +346,7 @@
     els.startBtn.addEventListener('click', startCamera);
     els.stopBtn.addEventListener('click', stopCamera);
     els.restartBtn.addEventListener('click', restartCamera);
+
     window.addEventListener('resize', ()=>{ smX=null; smY=null; updateGarmentTransform(); });
 
     // 初期ロード
@@ -406,4 +359,3 @@
   </script>
 </body>
 </html>
-
