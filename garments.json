@@ -5,7 +5,7 @@
     "shoulder_cm": 50,
     "length_cm": 67,
     "anchor": "shoulder_center",
-    "px_chest_hint": null
+    "px_chest_hint": 980
   }
 }
 
