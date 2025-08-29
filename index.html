@@ -9,11 +9,7 @@
     *{ box-sizing:border-box }
     html,body{ height:100%; margin:0 }
     body{ background:#000; color:var(--ui-fg); font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif }
-
-    /* ステージ */
     #stage{ position:relative; width:100vw; height:100vh; overflow:hidden; background:#000 }
-
-    /* ビデオ＆服 */
     #video{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
     .mirror{ transform: scaleX(-1); }
     #garment{
@@ -21,15 +17,11 @@
       display:none; pointer-events:none; opacity:0; transition:opacity .22s ease;
       will-change:left, top, width, opacity;
     }
-
-    /* PC案内 */
     #pcOnly{ position:absolute; inset:0; display:none; place-items:center; color:#fff; padding:24px; text-align:center; }
     #pcOnly .card{ background:transparent; padding:22px 24px; border-radius:16px; border:1px solid rgba(255,255,255,.25) }
     #pcOnly h1{ margin:0 0 10px; font-size:20px; }
     #pcOnly p{ margin:8px 0; opacity:.95; line-height:1.6; }
     #pcOnly .mono{ font:12px ui-monospace,monospace; opacity:.8; }
-
-    /* スタート */
     #startScreen{ position:absolute; inset:0; display:grid; place-items:center; background:rgba(0,0,0,.45); }
     #startCard{ background:transparent; color:#fff; padding:24px 28px; border-radius:16px; border:1px solid rgba(255,255,255,.25) }
     #startCard h1{ margin:0 0 10px; font-size:22px; }
@@ -37,8 +29,6 @@
     .btn{ appearance:none; border:0; border-radius:10px; padding:12px 16px; font-weight:700; cursor:pointer; }
     .btn.primary{ background:var(--ui-accent); color:#053; }
     .btn.ghost{ background:rgba(255,255,255,.12); color:#fff; }
-
-    /* 設定（完全透明） */
     #panel{
       position:absolute; right:18px; bottom:86px; width:320px; max-width:92vw;
       background:transparent; color:#fff; border-radius:16px; padding:8px 10px; display:none;
@@ -50,14 +40,11 @@
     .row > label{ font-size:12px; opacity:.95; text-shadow:0 1px 2px rgba(0,0,0,.4); }
     input[type="range"], input[type="checkbox"]{ width:100%; }
     .mono{ font:12px ui-monospace,monospace; opacity:.95; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-
-    /* ⚙ */
     #toggle{
       position:absolute; right:20px; bottom:20px; width:48px; height:48px; border-radius:50%;
       display:grid; place-items:center; background:#10b981; color:#002; font-weight:800; cursor:pointer;
       box-shadow:0 6px 24px rgba(0,0,0,.35);
     }
-
     @media (max-width:420px){
       #panel{ right:12px; bottom:76px; }
       #startCard{ padding:20px; border-radius:12px; }
@@ -69,7 +56,6 @@
     <video id="video" autoplay playsinline muted></video>
     <img id="garment" alt="garment" src="public/garments/trainer.png" />
 
-    <!-- PC案内 -->
     <div id="pcOnly">
       <div class="card">
         <h1>スマホ専用です 📱</h1>
@@ -78,7 +64,6 @@
       </div>
     </div>
 
-    <!-- スタート -->
     <div id="startScreen">
       <div id="startCard">
         <h1>カメラの準備をします</h1>
@@ -88,25 +73,14 @@
       </div>
     </div>
 
-    <!-- 設定（最小構成） -->
     <div id="panel" role="dialog" aria-modal="false" aria-label="設定">
       <h2>設定</h2>
-
-      <div class="row">
-        <label>カメラ</label>
-        <button id="modeBtn" type="button" class="btn ghost" style="padding:8px 10px">イン（ミラーON）に起動中</button>
-      </div>
-
+      <div class="row"><label>カメラ</label><button id="modeBtn" type="button" class="btn ghost" style="padding:8px 10px">イン（ミラーON）に起動中</button></div>
       <div class="row"><label>ミラー</label><input id="mirrorChk" type="checkbox" checked /></div>
       <div class="row"><label>横位置（微調整）</label><input id="offX" type="range" min="-80" max="80" value="0" /></div>
       <div class="row"><label>縦位置（微調整）</label><input id="offY" type="range" min="-120" max="120" value="0" /></div>
-
       <div class="row"><label>プリセット</label><div id="presetInfo" class="mono">loading…</div></div>
-
-      <div class="row">
-        <button id="stopBtn" class="btn ghost">停止</button>
-        <button id="restartBtn" class="btn ghost">再起動</button>
-      </div>
+      <div class="row"><button id="stopBtn" class="btn ghost">停止</button><button id="restartBtn" class="btn ghost">再起動</button></div>
     </div>
 
     <button id="toggle" title="設定">⚙</button>
@@ -135,37 +109,32 @@
       restartBtn: document.getElementById('restartBtn'),
     };
 
-    /* ===== 調整（デフォルト） ===== */
-    const ALPHA_POS   = 0.16;
-    const ALPHA_SCALE = 0.12;
-    const HOLD_MS     = 600;
-    let   ANCHOR_Y_FRAC = 0.33; // ←あなたの決定値
-    let   DROP_K        = 0.14;
-    const FIT_GAIN      = 1.0;  // 常に自動フィットに寄せる
+    const ALPHA_POS=0.16, ALPHA_SCALE=0.12, HOLD_MS=600;
+    let ANCHOR_Y_FRAC=0.33, DROP_K=0.14;  // あなたの決定値を既定に
+    const FIT_GAIN=1.0;
 
-    /* ===== 状態 ===== */
     let stream=null, facing='user', mirror=true;
     let landmarker=null, fileset=null;
     let lastDetMS=0, smX=null, smY=null, smS=1;
     let garmentNatW=0, garmentNatH=0, garmentConf=null, autoDropPx=0;
 
-    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent||'');
+    const isMobile=/Android|iPhone|iPad|iPod/i.test(navigator.userAgent||'');
     if(!isMobile){ els.pcOnly.style.display='grid'; els.uaText.textContent=navigator.userAgent; }
 
     els.garment.addEventListener('load', ()=>{
-      garmentNatW = els.garment.naturalWidth  || els.garment.width  || 1000;
-      garmentNatH = els.garment.naturalHeight || els.garment.height || 1000;
+      garmentNatW=els.garment.naturalWidth||els.garment.width||1000;
+      garmentNatH=els.garment.naturalHeight||els.garment.height||1000;
     });
 
-    const sleep=(ms)=>new Promise(r=>setTimeout(r,ms));
-    const lerp =(a,b,t)=>a+(b-a)*t;
+    const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+    const lerp=(a,b,t)=>a+(b-a)*t;
 
     async function startCamera(){
       try{
         if(stream){ stream.getTracks().forEach(t=>t.stop()); }
-        const constraints = { audio:false, video:{ facingMode:facing, width:{ideal:1280}, height:{ideal:720} } };
-        stream = await navigator.mediaDevices.getUserMedia(constraints);
-        els.video.srcObject = stream;
+        const constraints={ audio:false, video:{ facingMode:facing, width:{ideal:1280}, height:{ideal:720} } };
+        stream=await navigator.mediaDevices.getUserMedia(constraints);
+        els.video.srcObject=stream;
         await els.video.play().catch(()=>{});
         els.startScreen.style.display='none';
         applyMirror();
@@ -180,9 +149,9 @@
     async function restartCamera(){ await stopCamera(); await sleep(50); await startCamera(); }
 
     async function initPose(){
-      const files = await vision.FilesetResolver.forVisionTasks(WASM_BASE);
-      fileset = files;
-      landmarker = await vision.PoseLandmarker.createFromOptions(fileset, {
+      const files=await vision.FilesetResolver.forVisionTasks(WASM_BASE);
+      fileset=files;
+      landmarker=await vision.PoseLandmarker.createFromOptions(fileset,{
         baseOptions:{ modelAssetPath:`${WASM_BASE}pose_landmarker_lite.task` },
         runningMode:'VIDEO', numPoses:1,
         minPoseDetectionConfidence:0.5, minPosePresenceConfidence:0.5, minTrackingConfidence:0.5,
@@ -191,121 +160,108 @@
 
     async function loadGarmentConfig(){
       try{
-        const r = await fetch('garments.json',{cache:'no-store'});
+        const r=await fetch('garments.json',{cache:'no-store'});
         if(!r.ok) throw new Error('HTTP '+r.status);
-        const data = await r.json();
-        const firstKey = Object.keys(data)[0];
-        garmentConf = data[firstKey] || null;
-      }catch(e){
-        console.warn('garments.json 読込失敗:', e);
-      }
+        const data=await r.json();
+        const firstKey=Object.keys(data)[0];
+        garmentConf=data[firstKey]||null;
+      }catch(e){ console.warn('garments.json 読込失敗:', e); }
     }
 
-    // ★プリセット読込：詳しく理由を表示（HTTP/JSON/未マッチを区別）
+    // ここを強化：BOM除去＋先頭文字チェック＋エラーメッセージ詳細
     async function loadPresets(){
       try{
-        const r = await fetch('presets.json',{cache:'no-store'});
+        const r=await fetch('presets.json',{cache:'no-store'});
         if(!r.ok) throw new Error('HTTP '+r.status);
-        const txt = await r.text();
-        let cfg;
-        try{ cfg = JSON.parse(txt); }
+        let txt=await r.text();
+        txt=txt.replace(/^\uFEFF/,'').trim();            // ← BOM除去
+        if(!txt.startsWith('{')) throw new Error('not JSON (starts with "'+txt.slice(0,20).replace(/\s/g,' ')+'…")');
+        let cfg; try{ cfg=JSON.parse(txt); }             // ← 厳密JSON parse
         catch(e){ throw new Error('JSON parse error'); }
 
-        const ua = navigator.userAgent || '';
-        let anchor = cfg?.defaults?.anchorY ?? ANCHOR_Y_FRAC;
-        let dropK  = cfg?.defaults?.dropK  ?? DROP_K;
-
+        const ua=navigator.userAgent||'';
+        let anchor=cfg?.defaults?.anchorY ?? ANCHOR_Y_FRAC;
+        let dropK =cfg?.defaults?.dropK  ?? DROP_K;
         let matched=false;
+
         if(Array.isArray(cfg?.models)){
           for(const m of cfg.models){
-            const re = new RegExp(m.match,'i');
+            const re=new RegExp(m.match,'i');
             if(re.test(ua)){ matched=true;
-              if(typeof m.anchorY === 'number') anchor = m.anchorY;
-              if(typeof m.dropK  === 'number') dropK  = m.dropK;
+              if(typeof m.anchorY==='number') anchor=m.anchorY;
+              if(typeof m.dropK==='number')   dropK =m.dropK;
               break;
             }
           }
         }
-        ANCHOR_Y_FRAC = anchor; DROP_K = dropK;
+        ANCHOR_Y_FRAC=anchor; DROP_K=dropK;
         els.presetInfo.textContent = matched
           ? `applied: anchorY=${ANCHOR_Y_FRAC.toFixed(2)} / dropK=${DROP_K.toFixed(3)}`
           : `defaults: anchorY=${ANCHOR_Y_FRAC.toFixed(2)} / dropK=${DROP_K.toFixed(3)}`;
       }catch(e){
-        els.presetInfo.textContent = 'load error: ' + e.message;
+        els.presetInfo.textContent='load error: '+e.message;
         console.warn('presets.json 読込失敗:', e);
       }
     }
 
     function updateGarmentTransform(){
-      if(garmentNatW===0 || !garmentConf) return;
-
-      // スケール（自動のみ）
-      let s = 1;
+      if(garmentNatW===0||!garmentConf) return;
+      let s=1;
       if(updateGarmentTransform._shoulderPX){
-        const pxHint = garmentConf.px_chest_hint || 980;
-        let chestPx = updateGarmentTransform._shoulderPX;
+        const pxHint=garmentConf.px_chest_hint||980;
+        let chestPx=updateGarmentTransform._shoulderPX;
         if(garmentConf.chest_cm && garmentConf.shoulder_cm){
-          chestPx *= (garmentConf.chest_cm/garmentConf.shoulder_cm);
+          chestPx*= (garmentConf.chest_cm/garmentConf.shoulder_cm);
         }
-        const autoS = (pxHint>0) ? (chestPx/pxHint) : 1;
-        s = lerp(1, autoS, FIT_GAIN);
+        const autoS=(pxHint>0)?(chestPx/pxHint):1;
+        s=lerp(1,autoS,FIT_GAIN);
       }
-      smS = (smS==null)? s : lerp(smS, s, ALPHA_SCALE);
+      smS=(smS==null)?s:lerp(smS,s,ALPHA_SCALE);
 
-      const W = els.stage.clientWidth, H = els.stage.clientHeight;
-      const cx = updateGarmentTransform._cx ?? (W/2);
-      const cy = updateGarmentTransform._cy ?? (H/2);
-      smX = (smX==null)? cx : lerp(smX, cx, ALPHA_POS);
-      smY = (smY==null)? cy : lerp(smY, cy, ALPHA_POS);
+      const W=els.stage.clientWidth, H=els.stage.clientHeight;
+      const cx=updateGarmentTransform._cx ?? (W/2);
+      const cy=updateGarmentTransform._cy ?? (H/2);
+      smX=(smX==null)?cx:lerp(smX,cx,ALPHA_POS);
+      smY=(smY==null)?cy:lerp(smY,cy,ALPHA_POS);
 
-      const w = garmentNatW * smS;
-      const h = garmentNatH * smS;
+      const w=garmentNatW*smS, h=garmentNatH*smS;
+      const desiredY=smY+autoDropPx;
+      const anchorOffset=(0.5-ANCHOR_Y_FRAC)*h;
 
-      const desiredY = smY + autoDropPx;
-      const anchorOffset = (0.5 - ANCHOR_Y_FRAC) * h;
+      const offX=parseInt(els.offX.value,10)||0;
+      const offY=parseInt(els.offY.value,10)||0;
 
-      const offX = parseInt(els.offX.value,10) || 0;
-      const offY = parseInt(els.offY.value,10) || 0;
-
-      els.garment.style.width = `${w}px`;
-      els.garment.style.left  = `${smX + offX}px`;
-      els.garment.style.top   = `${desiredY + anchorOffset + offY}px`;
+      els.garment.style.width=`${w}px`;
+      els.garment.style.left =`${smX+offX}px`;
+      els.garment.style.top  =`${desiredY+anchorOffset+offY}px`;
     }
 
     async function tick(){
-      if(!landmarker || !els.video || !els.video.videoWidth){ requestAnimationFrame(tick); return; }
-
-      const W = els.stage.clientWidth;
-      const H = els.stage.clientHeight;
-      const now = performance.now();
-      let ok=false;
+      if(!landmarker||!els.video||!els.video.videoWidth){ requestAnimationFrame(tick); return; }
+      const W=els.stage.clientWidth, H=els.stage.clientHeight;
+      const now=performance.now(); let ok=false;
 
       try{
-        const result = landmarker.detectForVideo(els.video, now);
-        const lm = (result.landmarks && result.landmarks[0]) ? result.landmarks[0] : null;
+        const result=landmarker.detectForVideo(els.video,now);
+        const lm=(result.landmarks && result.landmarks[0])?result.landmarks[0]:null;
         if(lm){
-          const L = lm[11], R = lm[12];
-          if(L && R){
-            let cx = (L.x + R.x)/2 * W;
-            let cy = (L.y + R.y)/2 * H;
-            if(mirror){ cx = W - cx; }
-
-            const shoulderPX = Math.abs(R.x - L.x) * W;
-            updateGarmentTransform._shoulderPX = shoulderPX;
-            autoDropPx = shoulderPX * DROP_K;
-
-            updateGarmentTransform._cx = cx;
-            updateGarmentTransform._cy = cy;
-
-            lastDetMS = now; ok=true;
+          const L=lm[11], R=lm[12];
+          if(L&&R){
+            let cx=(L.x+R.x)/2*W, cy=(L.y+R.y)/2*H;
+            if(mirror){ cx=W-cx; }
+            const shoulderPX=Math.abs(R.x-L.x)*W;
+            updateGarmentTransform._shoulderPX=shoulderPX;
+            autoDropPx=shoulderPX*DROP_K;
+            updateGarmentTransform._cx=cx; updateGarmentTransform._cy=cy;
+            lastDetMS=now; ok=true;
           }
         }
       }catch(e){ console.warn('pose detect error:', e); }
 
-      const hold = (now - lastDetMS) < HOLD_MS;
-      const wantShow = ok || hold;
-      els.garment.style.display = wantShow ? 'block' : 'none';
-      els.garment.style.opacity = wantShow ? '1' : '0';
+      const hold=(now-lastDetMS)<HOLD_MS;
+      const wantShow=ok||hold;
+      els.garment.style.display=wantShow?'block':'none';
+      els.garment.style.opacity=wantShow?'1':'0';
 
       updateGarmentTransform();
       requestAnimationFrame(tick);
@@ -316,15 +272,14 @@
       els.garment.classList.toggle('mirror', mirror);
     }
 
-    /* events */
     els.toggle.addEventListener('click', ()=> els.panel.classList.toggle('open'));
     els.modeBtn.addEventListener('click', async ()=>{
-      facing = (facing==='user') ? 'environment' : 'user';
-      mirror = (facing==='user'); applyMirror();
-      els.modeBtn.textContent = facing==='user' ? 'イン（ミラーON）に起動中' : 'アウト（ミラーOFF）に起動中';
+      facing=(facing==='user')?'environment':'user';
+      mirror=(facing==='user'); applyMirror();
+      els.modeBtn.textContent=(facing==='user')?'イン（ミラーON）に起動中':'アウト（ミラーOFF）に起動中';
       await restartCamera();
     });
-    els.mirrorChk.addEventListener('change', ()=>{ mirror = !!els.mirrorChk.checked; applyMirror(); });
+    els.mirrorChk.addEventListener('change', ()=>{ mirror=!!els.mirrorChk.checked; applyMirror(); });
     ['offX','offY'].forEach(id=> els[id].addEventListener('input', updateGarmentTransform));
     els.startBtn.addEventListener('click', startCamera);
     els.stopBtn.addEventListener('click', stopCamera);
@@ -332,9 +287,9 @@
     window.addEventListener('resize', ()=>{ smX=null; smY=null; updateGarmentTransform(); });
 
     (async ()=>{
-      els.mirrorChk.checked = mirror;
-      els.modeBtn.textContent = 'イン（ミラーON）に起動中';
-      await loadPresets();       // ← 先にプリセット
+      els.mirrorChk.checked=mirror;
+      els.modeBtn.textContent='イン（ミラーON）に起動中';
+      await loadPresets();       // ← プリセット先に
       await loadGarmentConfig(); // ← 服寸法ヒント
     })();
   </script>
