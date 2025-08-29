@@ -86,12 +86,14 @@
     const { FilesetResolver, PoseLandmarker } = vision;
     const WASM_BASE = './vendor/mediapipe/wasm';
 
-    // --- 調整パラメータ ------------------------------------
-    const ALPHA_POS   = 0.18;   // 位置スムージング（大→より滑らか）
-    const ALPHA_SCALE = 0.12;   // スケールスムージング
-    const HOLD_MS     = 180;    // 一時未検出のホールド
-    const ANCHOR_Y_FRAC = 0.30; // 服画像内の「肩ライン」の縦位置（0:上端, 1:下端）
-    // -------------------------------------------------------
+   // --- 調整パラメータ ------------------------------------
+const ALPHA_POS   = 0.16;   // 位置スムージング（大きいほど滑らか/遅い）
+const ALPHA_SCALE = 0.12;   // スケールスムージング
+const HOLD_MS     = 180;    // 一時未検出のホールド
+const ANCHOR_Y_FRAC = 0.28; // 服画像内「肩ライン」の縦位置（0:上端, 1:下端）
+const DROP_K      = 0.14;   // 肩幅pxに対する自動ドロップ割合（下げ率）←これが肝
+// -------------------------------------------------------
+--------------------------------------------
 
     let stream=null, facing='user';
     let landmarker=null, landmarkerReady=false, shoulderOK=false, lastOKts=0;
