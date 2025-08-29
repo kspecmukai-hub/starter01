@@ -3,22 +3,205 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>starter01</title>
+  <title>starter01 | Camera Base</title>
   <style>
-    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;line-height:1.6;margin:0;padding:24px;background:#fafafa;color:#222}
-    .card{max-width:780px;margin:0 auto;background:#fff;border:1px solid #eee;border-radius:16px;padding:20px;box-shadow:0 2px 12px rgba(0,0,0,.04)}
-    h1{font-size:22px;margin:0 0 8px}
+    :root { --ui-bg:#111; --ui-card:#1a1a1a; --ui-fg:#fff; --ui-accent:#4ade80; }
+    * { box-sizing: border-box; }
+    html,body { height:100%; margin:0; }
+    body { background:#000; color:#eaeaea; font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; }
+    /* ステージ（全画面カメラ） */
+    #stage { position:relative; width:100vw; height:100vh; overflow:hidden; background:#000; }
+    #video { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; background:#000; }
+    .mirror { transform: scaleX(-1); }
+    /* 服PNG（今日は非表示のまま。次の一歩で追従表示に使う） */
+    #garment { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); max-width:60vmin; display:none; pointer-events:none; }
+
+    /* スタート画面（ユーザー操作 → カメラ許可のため） */
+    #startScreen { position:absolute; inset:0; display:grid; place-items:center; background:rgba(0,0,0,.55); }
+    #startCard { background:#fff; color:#111; padding:20px 24px; border-radius:16px; width:min(92vw,520px); box-shadow:0 8px 32px rgba(0,0,0,.35); }
+    #startCard h1 { margin:0 0 10px; font-size:20px; }
+    #startCard p { margin:0 0 14px; line-height:1.6; }
+    #startBtn { width:100%; padding:12px 16px; border-radius:12px; border:0; font-size:16px; cursor:pointer; background:#111; color:#fff; }
+    #startBtn:disabled { opacity:.6; cursor:not-allowed; }
+
+    /* 右下トグル＆設定パネル（初期は閉） */
+    #toggle { position:fixed; right:16px; bottom:16px; width:52px; height:52px; border-radius:999px; border:0; background:var(--ui-accent); color:#111; font-size:22px; box-shadow:0 8px 28px rgba(0,0,0,.35); cursor:pointer; }
+    #panel { position:fixed; right:16px; bottom:86px; width:min(92vw,360px); background:var(--ui-card); color:var(--ui-fg); border:1px solid #2a2a2a; border-radius:16px; box-shadow:0 20px 40px rgba(0,0,0,.45); padding:12px; transform-origin:100% 100%; transform:scale(.9); opacity:0; pointer-events:none; transition:.18s ease; }
+    #panel.open { transform:scale(1); opacity:1; pointer-events:auto; }
+    #panel h2 { margin:4px 6px 10px; font-size:14px; font-weight:600; opacity:.9; }
+    .row { display:flex; align-items:center; gap:8px; margin:8px 6px; }
+    .row label { min-width:90px; font-size:14px; opacity:.9; }
+    .row select, .row button, .row input[type="checkbox"] { font-size:14px; }
+    .hint { margin:6px; font-size:12px; opacity:.7; }
+    #log { position:fixed; left:50%; bottom:16px; transform:translateX(-50%); background:#111; color:#fff; padding:6px 10px; border-radius:10px; font-size:12px; box-shadow:0 8px 28px rgba(0,0,0,.35); max-width:92vw; text-align:center; display:none; }
   </style>
 </head>
 <body>
-  <main class="card">
-    <h1>starter01</h1>
-    <p>公開の準備ができています。</p>
-    <ul>
-      <li><code>garments.json</code></li>
-      <li><code>public/garments/trainer.png</code></li>
-    </ul>
-    <p>※ このページはプレースホルダーです。後でAR機能を追加します。</p>
-  </main>
+  <div id="stage" aria-label="camera stage">
+    <video id="video" autoplay playsinline muted></video>
+    <img id="garment" src="public/garments/trainer.png" alt="garment"/>
+    <div id="startScreen" aria-live="polite">
+      <div id="startCard">
+        <h1>カメラの準備をします</h1>
+        <p>「カメラを開始」を押すと、ブラウザからカメラ許可を聞かれます。<br>インカメで開始し、ミラー表示（左右反転）になります。</p>
+        <button id="startBtn">カメラを開始</button>
+        <p class="hint">※ 後から右下の⚙で「アウトカメ／ミラーOFF」へ切替できます。</p>
+      </div>
+    </div>
+  </div>
+
+  <button id="toggle" title="設定">⚙</button>
+
+  <div id="panel" role="dialog" aria-modal="false" aria-label="設定">
+    <h2>設定</h2>
+    <div class="row">
+      <label for="modeBtn">カメラ</label>
+      <button id="modeBtn" type="button">イン（ミラーON）に起動中</button>
+    </div>
+    <div class="row">
+      <label for="mirrorChk">ミラー</label>
+      <input id="mirrorChk" type="checkbox" checked />
+    </div>
+    <div class="row">
+      <label for="deviceSel">デバイス</label>
+      <select id="deviceSel"></select>
+    </div>
+    <div class="row">
+      <button id="stopBtn" type="button">停止</button>
+      <button id="restartBtn" type="button">再起動</button>
+    </div>
+    <p class="hint">今日は「カメラ表示の土台」まで。<br>次の一歩で肩検出→服PNG表示を足します。</p>
+  </div>
+
+  <div id="log" role="status"></div>
+
+  <script>
+    // ========= 基本状態 =========
+    let stream = null;
+    let facing = 'user'; // 'user'（イン） / 'environment'（アウト）
+    const els = {
+      video: document.getElementById('video'),
+      garment: document.getElementById('garment'),
+      startScreen: document.getElementById('startScreen'),
+      startBtn: document.getElementById('startBtn'),
+      toggle: document.getElementById('toggle'),
+      panel: document.getElementById('panel'),
+      modeBtn: document.getElementById('modeBtn'),
+      mirrorChk: document.getElementById('mirrorChk'),
+      deviceSel: document.getElementById('deviceSel'),
+      stopBtn: document.getElementById('stopBtn'),
+      restartBtn: document.getElementById('restartBtn'),
+      log: document.getElementById('log'),
+    };
+
+    // ========= ユーティリティ =========
+    function toast(msg, ms=2200){
+      els.log.textContent = msg;
+      els.log.style.display = 'block';
+      clearTimeout(els.log._t);
+      els.log._t = setTimeout(()=> els.log.style.display='none', ms);
+      console.info('[INFO]', msg);
+    }
+    function stopStream(){
+      if(stream){
+        stream.getTracks().forEach(t=>t.stop());
+        stream = null;
+      }
+    }
+    function applyMirror(){
+      const on = els.mirrorChk.checked;
+      els.video.classList.toggle('mirror', on);
+    }
+    function setModeLabel(){
+      const isUser = facing === 'user';
+      els.modeBtn.textContent = isUser ? 'イン（ミラーON）に起動中' : 'アウト（反転OFF）に起動中';
+      els.mirrorChk.checked = isUser; // 仕様：イン=ON / アウト=OFF
+      applyMirror();
+    }
+
+    // ========= カメラ起動 =========
+    async function startCamera({ deviceId } = {}){
+      try{
+        stopStream();
+        const constraints = deviceId
+          ? { video: { deviceId: { exact: deviceId } }, audio: false }
+          : { video: { facingMode: facing }, audio: false };
+
+        stream = await navigator.mediaDevices.getUserMedia(constraints);
+        els.video.srcObject = stream;
+
+        // ラベル取得のため一度許可後に列挙
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const cams = devices.filter(d => d.kind === 'videoinput');
+
+        // セレクト更新
+        const prev = els.deviceSel.value;
+        els.deviceSel.innerHTML = '';
+        cams.forEach(d=>{
+          const opt = document.createElement('option');
+          opt.value = d.deviceId;
+          opt.textContent = d.label || `カメラ ${els.deviceSel.length+1}`;
+          els.deviceSel.appendChild(opt);
+        });
+        // 選択状態（deviceId 指定があればそれ、なければ同じデバイスを維持）
+        if(deviceId && cams.some(c=>c.deviceId===deviceId)){
+          els.deviceSel.value = deviceId;
+        }else if(cams.some(c=>c.deviceId===prev)){
+          els.deviceSel.value = prev;
+        }
+
+        setModeLabel();
+        toast('カメラを開始しました');
+      }catch(err){
+        console.error(err);
+        toast('カメラを開始できませんでした。別のデバイスやブラウザを試してください。');
+      }
+    }
+
+    // ========= イベント =========
+    els.startBtn.addEventListener('click', async ()=>{
+      els.startBtn.disabled = true;
+      await startCamera();          // facing='user' で起動
+      els.startScreen.style.display = 'none';
+    });
+
+    els.toggle.addEventListener('click', ()=>{
+      els.panel.classList.toggle('open');
+    });
+
+    els.modeBtn.addEventListener('click', async ()=>{
+      facing = (facing === 'user') ? 'environment' : 'user';
+      await startCamera();
+    });
+
+    els.mirrorChk.addEventListener('change', applyMirror);
+
+    els.deviceSel.addEventListener('change', async ()=>{
+      const id = els.deviceSel.value;
+      await startCamera({ deviceId: id });
+    });
+
+    els.stopBtn.addEventListener('click', ()=>{
+      stopStream();
+      toast('カメラを停止しました');
+    });
+
+    els.restartBtn.addEventListener('click', async ()=>{
+      await startCamera();
+    });
+
+    // ========= 起動時：服データの存在チェック（将来のため） =========
+    (async ()=>{
+      try{
+        const res = await fetch('garments.json', { cache: 'no-store' });
+        if(!res.ok) throw new Error(res.status);
+        const data = await res.json();
+        console.log('garments.json loaded:', data);
+      }catch(e){
+        console.warn('garments.json が読み込めません。', e);
+        toast('garments.json が見つかりません（あとで置けばOK）');
+      }
+    })();
+  </script>
 </body>
 </html>
