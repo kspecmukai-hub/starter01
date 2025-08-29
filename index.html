@@ -383,11 +383,13 @@
         console.warn('pose detect error:', e);
       }
 
-      // 表示制御
-      const hold = (now - lastDetMS) < HOLD_MS;
-      const wantShow = els.showGarment.checked || ok || hold;
-      els.garment.style.display = wantShow ? 'block':'none';
-      els.garment.style.opacity = (ok || hold) ? '1' : '0';
+      // 表示制御（修正版）
+const hold = (now - lastDetMS) < HOLD_MS;
+const manualOn = els.showGarment.checked;   // 右下「服表示」
+const autoOn   = ok || hold;                // 肩が検出中 or 直近で検出
+const wantShow = manualOn && autoOn;        // ← AND に変更（OFFなら必ず非表示）
+els.garment.style.display = wantShow ? 'block' : 'none';
+els.garment.style.opacity = wantShow ? '1' : '0';
 
       els.poseState.textContent = ok ? '検出中' : (hold ? '保持中' : '未検出');
       els.poseState.style.background = ok ? '#0a0' : (hold ? '#996600' : '#555');
