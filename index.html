@@ -9,14 +9,20 @@
     * { box-sizing: border-box; }
     html,body { height:100%; margin:0; }
     body { background:#000; color:#eaeaea; font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; }
+
     /* ステージ（全画面カメラ） */
     #stage { position:relative; width:100vw; height:100vh; overflow:hidden; background:#000; }
     #video { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; background:#000; }
-    .mirror { transform: scaleX(-1); }
-    /* 服PNG（今日は非表示のまま。次の一歩で追従表示に使う） */
-    #garment { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); max-width:60vmin; display:none; pointer-events:none; }
+    .mirror { transform: scaleX(-1); } /* 動画の左右反転に使用 */
 
-    /* スタート画面（ユーザー操作 → カメラ許可のため） */
+    /* 服PNG（手動表示用。次ステップで自動追従に拡張） */
+    #garment {
+      position:absolute; top:50%; left:50%;
+      transform:translate(-50%,-50%); /* JSで上書き */
+      max-width:60vmin; display:none; pointer-events:none;
+    }
+
+    /* スタート画面（カメラ許可） */
     #startScreen { position:absolute; inset:0; display:grid; place-items:center; background:rgba(0,0,0,.55); }
     #startCard { background:#fff; color:#111; padding:20px 24px; border-radius:16px; width:min(92vw,520px); box-shadow:0 8px 32px rgba(0,0,0,.35); }
     #startCard h1 { margin:0 0 10px; font-size:20px; }
@@ -45,32 +51,55 @@
         <h1>カメラの準備をします</h1>
         <p>「カメラを開始」を押すと、ブラウザからカメラ許可を聞かれます。<br>インカメで開始し、ミラー表示（左右反転）になります。</p>
         <button id="startBtn">カメラを開始</button>
-        <p class="hint">※ 後から右下の⚙で「アウトカメ／ミラーOFF」へ切替できます。</p>
+        <p class="hint">※ 後から右下の⚙で「アウトカメ／ミラーOFF」に切替できます。</p>
       </div>
     </div>
   </div>
 
   <button id="toggle" title="設定">⚙</button>
 
+  <!-- 設定パネル（フル差し替え済み） -->
   <div id="panel" role="dialog" aria-modal="false" aria-label="設定">
     <h2>設定</h2>
+
     <div class="row">
       <label for="modeBtn">カメラ</label>
       <button id="modeBtn" type="button">イン（ミラーON）に起動中</button>
     </div>
+
     <div class="row">
       <label for="mirrorChk">ミラー</label>
       <input id="mirrorChk" type="checkbox" checked />
     </div>
+
     <div class="row">
       <label for="deviceSel">デバイス</label>
       <select id="deviceSel"></select>
     </div>
+
+    <!-- 服表示と微調整 -->
+    <div class="row">
+      <label for="showGarment">服表示</label>
+      <input id="showGarment" type="checkbox" />
+    </div>
+    <div class="row">
+      <label for="posX">横位置</label>
+      <input id="posX" type="range" min="-40" max="40" value="0" />
+    </div>
+    <div class="row">
+      <label for="posY">縦位置</label>
+      <input id="posY" type="range" min="-40" max="40" value="0" />
+    </div>
+    <div class="row">
+      <label for="scale">サイズ</label>
+      <input id="scale" type="range" min="50" max="150" value="100" />
+    </div>
+
     <div class="row">
       <button id="stopBtn" type="button">停止</button>
       <button id="restartBtn" type="button">再起動</button>
     </div>
-    <p class="hint">今日は「カメラ表示の土台」まで。<br>次の一歩で肩検出→服PNG表示を足します。</p>
+    <p class="hint">今日は「カメラ表示の土台」＋「手動で服PNG表示」まで。次の一歩で肩検出を追加します。</p>
   </div>
 
   <div id="log" role="status"></div>
@@ -89,6 +118,10 @@
       modeBtn: document.getElementById('modeBtn'),
       mirrorChk: document.getElementById('mirrorChk'),
       deviceSel: document.getElementById('deviceSel'),
+      showGarment: document.getElementById('showGarment'),
+      posX: document.getElementById('posX'),
+      posY: document.getElementById('posY'),
+      scale: document.getElementById('scale'),
       stopBtn: document.getElementById('stopBtn'),
       restartBtn: document.getElementById('restartBtn'),
       log: document.getElementById('log'),
@@ -108,9 +141,18 @@
         stream = null;
       }
     }
+    function updateGarmentTransform(){
+      const dx = Number(els.posX.value);
+      const dy = Number(els.posY.value);
+      const s  = Number(els.scale.value) / 100;
+      const mirror = els.mirrorChk.checked ? -1 : 1; // ミラー時は左右反転
+      els.garment.style.transform =
+        `translate(-50%,-50%) scaleX(${mirror}) translate(${dx}vmin, ${dy}vmin) scale(${s})`;
+    }
     function applyMirror(){
       const on = els.mirrorChk.checked;
-      els.video.classList.toggle('mirror', on);
+      els.video.classList.toggle('mirror', on); // 動画はクラスで反転
+      updateGarmentTransform();                 // 服は変換式で反映
     }
     function setModeLabel(){
       const isUser = facing === 'user';
@@ -130,7 +172,7 @@
         stream = await navigator.mediaDevices.getUserMedia(constraints);
         els.video.srcObject = stream;
 
-        // ラベル取得のため一度許可後に列挙
+        // 許可後にデバイス列挙（ラベル取得のため）
         const devices = await navigator.mediaDevices.enumerateDevices();
         const cams = devices.filter(d => d.kind === 'videoinput');
 
@@ -143,7 +185,6 @@
           opt.textContent = d.label || `カメラ ${els.deviceSel.length+1}`;
           els.deviceSel.appendChild(opt);
         });
-        // 選択状態（deviceId 指定があればそれ、なければ同じデバイスを維持）
         if(deviceId && cams.some(c=>c.deviceId===deviceId)){
           els.deviceSel.value = deviceId;
         }else if(cams.some(c=>c.deviceId===prev)){
@@ -190,7 +231,19 @@
       await startCamera();
     });
 
-    // ========= 起動時：服データの存在チェック（将来のため） =========
+    // 服の表示と微調整
+    els.showGarment.addEventListener('change', ()=>{
+      els.garment.style.display = els.showGarment.checked ? 'block' : 'none';
+    });
+    [els.posX, els.posY, els.scale].forEach(el=>{
+      el.addEventListener('input', updateGarmentTransform);
+    });
+
+    // ========= 初期化 =========
+    updateGarmentTransform();            // スライダー初期値を反映
+    els.garment.style.display = 'none';  // 初期は非表示
+
+    // garments.json の存在チェック（将来のため）
     (async ()=>{
       try{
         const res = await fetch('garments.json', { cache: 'no-store' });
