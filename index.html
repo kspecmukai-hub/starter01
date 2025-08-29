@@ -13,7 +13,7 @@
     /* ステージ（全画面カメラ） */
     #stage { position:relative; width:100vw; height:100vh; overflow:hidden; background:#000; }
     #video { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; background:#000; }
-    .mirror { transform: scaleX(-1); } /* 動画の左右反転に使用 */
+    .mirror { transform: scaleX(-1); }
 
     /* 服PNG（手動表示＋検出ゲート） */
     #garment {
@@ -59,7 +59,6 @@
 
   <button id="toggle" title="設定">⚙</button>
 
-  <!-- 設定パネル -->
   <div id="panel" role="dialog" aria-modal="false" aria-label="設定">
     <h2>設定</h2>
 
@@ -111,14 +110,14 @@
 
   <div id="log" role="status"></div>
 
-  <!-- 以降はモジュールスクリプト：MediaPipeをCDNから読み込み -->
+  <!-- モジュール：CDNフォールバック付き -->
   <script type="module">
     // ========= 基本状態 =========
     let stream = null;
     let facing = 'user'; // 'user'（イン） / 'environment'（アウト）
     let landmarker = null;           // MediaPipe Pose
     let landmarkerReady = false;
-    let shoulderOK = true;           // 既定は true（検出未対応でも手動表示できるように）
+    let shoulderOK = true;           // 未対応でも手動表示できるよう true 始まり
     let lastVideoTime = -1;
 
     const els = {
@@ -165,8 +164,8 @@
     }
     function applyMirror(){
       const on = els.mirrorChk.checked;
-      els.video.classList.toggle('mirror', on); // 動画はクラスで反転
-      updateGarmentTransform();                 // 服は変換式で反映
+      els.video.classList.toggle('mirror', on);
+      updateGarmentTransform();
     }
     function setModeLabel(){
       const isUser = facing === 'user';
@@ -175,11 +174,10 @@
       applyMirror();
     }
     function refreshGarmentDisplay(){
-      // 手動スイッチがON かつ 肩が検出できている時のみ表示
       const show = els.showGarment.checked && shoulderOK;
       els.garment.style.display = show ? 'block' : 'none';
     }
-    function setBadge(state, text, color){
+    function setBadge(ok, text, color){
       els.badge.textContent = text;
       els.badge.style.background = color;
     }
@@ -195,11 +193,8 @@
         stream = await navigator.mediaDevices.getUserMedia(constraints);
         els.video.srcObject = stream;
 
-        // 許可後にデバイス列挙（ラベル取得のため）
         const devices = await navigator.mediaDevices.enumerateDevices();
         const cams = devices.filter(d => d.kind === 'videoinput');
-
-        // セレクト更新
         const prev = els.deviceSel.value;
         els.deviceSel.innerHTML = '';
         cams.forEach(d=>{
@@ -222,25 +217,38 @@
       }
     }
 
+    // ========= Tasks-Vision をCDNフォールバックで読み込む =========
+    async function loadTasksVision(){
+      const bundles = [
+        'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/vision_bundle.mjs',
+        'https://unpkg.com/@mediapipe/tasks-vision@0.10.3/vision_bundle.mjs',
+      ];
+      for(const url of bundles){
+        try{
+          const mod = await import(url);
+          const wasmBase = url.replace('/vision_bundle.mjs','/wasm');
+          return { ...mod, wasmBase };
+        }catch(e){
+          console.warn('tasks-vision load failed:', url, e);
+        }
+      }
+      throw new Error('tasks-vision の読み込みに失敗しました');
+    }
+
     // ========= MediaPipe Pose 初期化 =========
     async function initPose(){
       try{
         setBadge(false, '初期化中…', '#555');
-        const { FilesetResolver, PoseLandmarker } =
-          await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3');
-        const fileset = await FilesetResolver.forVisionTasks(
-          'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/wasm'
-        );
+        const { FilesetResolver, PoseLandmarker, wasmBase } = await loadTasksVision();
+        const fileset = await FilesetResolver.forVisionTasks(wasmBase);
+        const model = `${wasmBase}/pose_landmarker_lite.task`;
         landmarker = await PoseLandmarker.createFromOptions(fileset, {
-          baseOptions: {
-            modelAssetPath:
-              'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/wasm/pose_landmarker_lite.task'
-          },
+          baseOptions: { modelAssetPath: model },
           runningMode: 'VIDEO',
           numPoses: 1
         });
         landmarkerReady = true;
-        setBadge(true, '検出準備OK', '#2ea043'); // 緑
+        setBadge(true, '検出準備OK', '#2ea043');
         toast('肩検出の準備ができました');
         requestAnimationFrame(tick);
       }catch(e){
@@ -252,7 +260,7 @@
     }
 
     // ========= 検出ループ（肩ゲート） =========
-    function tick(timestamp){
+    function tick(){
       if(!landmarkerReady || !els.video.srcObject){ requestAnimationFrame(tick); return; }
       const vtime = Math.round(els.video.currentTime * 1000);
       if(vtime === lastVideoTime){ requestAnimationFrame(tick); return; }
@@ -280,9 +288,8 @@
     // ========= イベント =========
     els.startBtn.addEventListener('click', async ()=>{
       els.startBtn.disabled = true;
-      await startCamera();          // facing='user' で起動
+      await startCamera();          // facing='user'
       els.startScreen.style.display = 'none';
-      // カメラ開始後に検出ループ（初期化未済なら初期化）
       if(!landmarkerReady) initPose();
     });
 
@@ -295,9 +302,7 @@
       await startCamera();
     });
 
-    els.mirrorChk.addEventListener('change', ()=>{
-      applyMirror();
-    });
+    els.mirrorChk.addEventListener('change', applyMirror);
 
     els.deviceSel.addEventListener('change', async ()=>{
       const id = els.deviceSel.value;
@@ -320,9 +325,8 @@
     });
 
     // ========= 初期化 =========
-    updateGarmentTransform();            // スライダー初期値を反映
-    refreshGarmentDisplay();             // 初期の表示状態
-    // garments.json の存在チェック（将来のため）
+    updateGarmentTransform();
+    refreshGarmentDisplay();
     (async ()=>{
       try{
         const res = await fetch('garments.json', { cache: 'no-store' });
