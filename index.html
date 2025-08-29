@@ -18,7 +18,7 @@
     /* 服PNG（回転なし） */
     #garment{
       position:absolute; left:50%; top:50%;
-      transform:translate(-50%,-50%); /* ←JSでmirror時はscaleX(-1)を付与 */
+      transform:translate(-50%,-50%); /* mirror時はJSで scaleX(-1) を付与 */
       display:none; pointer-events:none; opacity:0; transition:opacity .22s ease;
       will-change:left,top,width,opacity,transform;
     }
@@ -135,34 +135,31 @@
     const WASM_BASE = './vendor/mediapipe/wasm/';
 
     /* ========= OneEuro Filter（位置・スケールのみ） ========= */
-    class LowPass{
-      constructor(alpha, initVal=null){ this.a=alpha; this.y=initVal; this.s=(initVal!==null); }
-      filter(v){ if(!this.s){ this.y=v; this.s=true; return v; } this.y = this.a*v + (1-this.a)*this.y; return this.y; }
-      setAlpha(a){ this.a=a; }
-    }
+    class LowPass{ constructor(a, init=null){ this.a=a; this.y=init; this.s=(init!==null); }
+      filter(v){ if(!this.s){ this.y=v; this.s=true; return v; } this.y=this.a*v+(1-this.a)*this.y; return this.y; }
+      setAlpha(a){ this.a=a; } }
     class OneEuro{
-      constructor(mincutoff=1.0, beta=0.007, dcutoff=1.0){
-        this.mincutoff=mincutoff; this.beta=beta; this.dcutoff=dcutoff;
-        this.x=new LowPass(1.0); this.dx=new LowPass(1.0); this.lastT=null;
-      }
+      constructor(mincutoff=1.0, beta=0.007, dcutoff=1.0){ this.mincutoff=mincutoff; this.beta=beta; this.dcutoff=dcutoff; this.x=new LowPass(1.0); this.dx=new LowPass(1.0); this.lastT=null; }
       alpha(cutoff, dt){ const tau=1/(2*Math.PI*cutoff); return 1/(1+tau/dt); }
-      filter(v, t){
-        if(this.lastT==null){ this.lastT=t; this.x=new LowPass(1.0, v); this.dx=new LowPass(1.0, 0); return v; }
-        const dt=Math.max(1e-3, t-this.lastT); this.lastT=t;
-        const prev=this.x.y ?? v;
-        const dx=(v-prev)/dt; this.dx.setAlpha(this.alpha(this.dcutoff, dt));
-        const edx=this.dx.filter(dx);
-        const cutoff=this.mincutoff + this.beta*Math.abs(edx);
-        this.x.setAlpha(this.alpha(cutoff, dt));
-        return this.x.filter(v);
-      }
-    }
-    const ONEURO_POS   = { mincutoff:1.2, beta:0.020, dcutoff:1.0 };
-    const ONEURO_SCALE = { mincutoff:1.0, beta:0.010, dcutoff:1.0 };
+      filter(v,t){ if(this.lastT==null){ this.lastT=t; this.x=new LowPass(1.0,v); this.dx=new LowPass(1.0,0); return v; }
+        const dt=Math.max(1e-3,t-this.lastT); this.lastT=t;
+        const prev=this.x.y ?? v; const dx=(v-prev)/dt; this.dx.setAlpha(this.alpha(this.dcutoff,dt));
+        const edx=this.dx.filter(dx); const cutoff=this.mincutoff + this.beta*Math.abs(edx);
+        this.x.setAlpha(this.alpha(cutoff,dt)); return this.x.filter(v); } }
 
-    const euroX = new OneEuro(ONEURO_POS.mincutoff,   ONEURO_POS.beta,   ONEURO_POS.dcutoff);
-    const euroY = new OneEuro(ONEURO_POS.mincutoff,   ONEURO_POS.beta,   ONEURO_POS.dcutoff);
-    const euroS = new OneEuro(ONEURO_SCALE.mincutoff, ONEURO_SCALE.beta, ONEURO_SCALE.dcutoff);
+    /* ===== 可変パラメータ（プリセットで上書き可） ===== */
+    let ANCHOR_Y_FRAC = 0.33;   // 肩ライン（0=上端〜1=下端）
+    let DROP_K        = 0.14;   // 肩幅に対するドロップ割合
+
+    let ONEURO_POS   = { mincutoff:1.2, beta:0.020, dcutoff:1.0 };
+    let ONEURO_SCALE = { mincutoff:1.0, beta:0.010, dcutoff:1.0 };
+
+    let euroX=null, euroY=null, euroS=null;
+    function rebuildFilters(){
+      euroX = new OneEuro(ONEURO_POS.mincutoff, ONEURO_POS.beta, ONEURO_POS.dcutoff);
+      euroY = new OneEuro(ONEURO_POS.mincutoff, ONEURO_POS.beta, ONEURO_POS.dcutoff);
+      euroS = new OneEuro(ONEURO_SCALE.mincutoff, ONEURO_SCALE.beta, ONEURO_SCALE.dcutoff);
+    }
 
     /* ========= 要素 ========= */
     const els = {
@@ -172,12 +169,8 @@
       userShoulder: userShoulder, offX: offX, offY: offY, stopBtn: stopBtn, restartBtn: restartBtn
     };
 
-    /* ========= 調整パラメータ ========= */
-    const HOLD_MS       = 600;   // 一時未検出ホールド
-    const ANCHOR_Y_FRAC = 0.33;  // 肩ライン（ご指定値）
-    const DROP_K        = 0.14;  // 肩幅に対するドロップ割合
-
     /* ========= 状態 ========= */
+    const HOLD_MS = 600;
     let stream=null, currentDeviceId=null, facing='user', mirror=true;
     let landmarker=null, fileset=null;
     let lastDetMS=0;
@@ -192,7 +185,36 @@
 
     const sleep=(ms)=>new Promise(r=>setTimeout(r,ms));
 
-    /* スマホ専用ゲート */
+    /* ========= 端末別プリセット適用 ========= */
+    async function applyDevicePreset(){
+      try{
+        const r = await fetch('presets.json', { cache:'no-store' });
+        const presets = await r.json();
+        const ua = navigator.userAgent;
+        console.info('[preset] UA:', ua);
+
+        let chosen = presets.defaults || {};
+        for(const m of (presets.models||[])){
+          const re = new RegExp(m.match, 'i');
+          if(re.test(ua)){ chosen = { ...presets.defaults, ...m }; break; }
+        }
+
+        // 係数反映
+        if(typeof chosen.anchorY === 'number') ANCHOR_Y_FRAC = chosen.anchorY;
+        if(typeof chosen.dropK   === 'number') DROP_K        = chosen.dropK;
+
+        if(chosen.pos)   ONEURO_POS   = { ...ONEURO_POS,   ...chosen.pos };
+        if(chosen.scale) ONEURO_SCALE = { ...ONEURO_SCALE, ...chosen.scale };
+
+        rebuildFilters();
+        console.info('[preset] applied:', { ANCHOR_Y_FRAC, DROP_K, ONEURO_POS, ONEURO_SCALE });
+      }catch(e){
+        console.warn('presets.json 読込失敗（デフォルト係数を使用）:', e);
+        rebuildFilters(); // デフォルトで作成
+      }
+    }
+
+    /* ========= スマホ専用ゲート ========= */
     const isMobile = /iPhone|Android.+Mobile|iPad|iPod/i.test(navigator.userAgent);
     if(!isMobile){ els.pcGate.style.display='grid'; els.startBtn.disabled=true; }
 
@@ -206,8 +228,8 @@
     }
 
     function applyMirror(){
-      els.video.classList.toggle('mirror', mirror);  // ←動画だけclassで反転
-      updateGarmentTransform();                      // ←服はtransform文字列で反映
+      els.video.classList.toggle('mirror', mirror);  // 動画はclassで反転
+      updateGarmentTransform();                      // 服はtransform文字列で反映
     }
 
     async function startCamera(){
@@ -247,12 +269,18 @@
       }
     }
 
+    /* garments.json（単体/配列どちらも許容） */
     async function loadGarmentConfig(){
       try{
         const r = await fetch('garments.json',{cache:'no-store'});
         const data = await r.json();
-        const firstKey = Object.keys(data)[0];
-        garmentConf = data[firstKey] || null;
+        if(Array.isArray(data)){
+          garmentConf = data[0] || null;
+          if(garmentConf?.src) garment.src = garmentConf.src;
+        }else{
+          const firstKey = Object.keys(data)[0];
+          garmentConf = data[firstKey] || null;
+        }
       }catch(e){
         console.warn('garments.json 読込失敗:', e);
       }
@@ -271,7 +299,7 @@
       const gChestCm    = garmentConf?.chest_cm     ?? null;
       const gShoulderCm = garmentConf?.shoulder_cm  ?? null;
 
-      // ユーザー肩幅(cm) 入力
+      // ユーザー肩幅(cm)
       const userShoulderCm = parseFloat(els.userShoulder.value) || parseFloat(localStorage.getItem('user_shoulder_cm')) || null;
 
       // 目標の胸幅px
@@ -310,23 +338,23 @@
       const offY = parseInt(els.offY.value,10) || 0;
 
       // 位置
-      els.garment.style.width = `${drawW}px`;
-      els.garment.style.left  = `${smX + offX}px`;
-      els.garment.style.top   = `${desiredY + anchorOffset + offY}px`;
+      garment.style.width = `${drawW}px`;
+      garment.style.left  = `${smX + offX}px`;
+      garment.style.top   = `${desiredY + anchorOffset + offY}px`;
 
       // 変形（回転なし・mirrorのみ反映）
       let tf = `translate(-50%,-50%)`;
       if(mirror) tf += ' scaleX(-1)';
-      els.garment.style.transform = tf;
+      garment.style.transform = tf;
     }
 
     async function tick(){
-      if(!landmarker || !els.video || !els.video.videoWidth){ requestAnimationFrame(tick); return; }
-      const W = els.stage.clientWidth, H = els.stage.clientHeight;
+      if(!landmarker || !video || !video.videoWidth){ requestAnimationFrame(tick); return; }
+      const W = stage.clientWidth, H = stage.clientHeight;
       const now = performance.now(); let ok=false;
 
       try{
-        const result = landmarker.detectForVideo(els.video, now);
+        const result = landmarker.detectForVideo(video, now);
         const lm = (result.landmarks && result.landmarks[0]) ? result.landmarks[0] : null;
         if(lm){
           const L = lm[11], R = lm[12];
@@ -348,10 +376,11 @@
         console.warn('pose detect error:', e);
       }
 
+      // 表示制御（自動のみ）
       const hold = (now - lastDetMS) < HOLD_MS;
-      const wantShow = ok || hold; // 自動のみ
-      els.garment.style.display = wantShow ? 'block' : 'none';
-      els.garment.style.opacity = wantShow ? '1' : '0';
+      const wantShow = ok || hold;
+      garment.style.display = wantShow ? 'block' : 'none';
+      garment.style.opacity = wantShow ? '1' : '0';
 
       updateGarmentTransform();
       requestAnimationFrame(tick);
@@ -386,7 +415,9 @@
       modeBtn.textContent = 'イン（ミラーON）に起動中';
       const saved = parseFloat(localStorage.getItem('user_shoulder_cm'));
       if(!isNaN(saved)) userShoulder.value = saved;
-      await loadGarmentConfig();
+
+      await applyDevicePreset();   // ← 端末別係数を適用（失敗時はデフォルト）
+      await loadGarmentConfig();   // ← 服寸法読込
     })();
   </script>
 </body>
