@@ -10,19 +10,16 @@
     html,body { height:100%; margin:0; }
     body { background:#000; color:#eaeaea; font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; }
 
-    /* ステージ（全画面カメラ） */
     #stage { position:relative; width:100vw; height:100vh; overflow:hidden; background:#000; }
     #video { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; background:#000; }
     .mirror { transform: scaleX(-1); }
 
-    /* 服PNG（手動表示＋検出ゲート） */
     #garment {
       position:absolute; top:50%; left:50%;
       transform:translate(-50%,-50%); /* JSで上書き */
       max-width:60vmin; display:none; pointer-events:none;
     }
 
-    /* スタート画面（カメラ許可） */
     #startScreen { position:absolute; inset:0; display:grid; place-items:center; background:rgba(0,0,0,.55); }
     #startCard { background:#fff; color:#111; padding:20px 24px; border-radius:16px; width:min(92vw,520px); box-shadow:0 8px 32px rgba(0,0,0,.35); }
     #startCard h1 { margin:0 0 10px; font-size:20px; }
@@ -30,7 +27,6 @@
     #startBtn { width:100%; padding:12px 16px; border-radius:12px; border:0; font-size:16px; cursor:pointer; background:#111; color:#fff; }
     #startBtn:disabled { opacity:.6; cursor:not-allowed; }
 
-    /* 右下トグル＆設定パネル（初期は閉） */
     #toggle { position:fixed; right:16px; bottom:16px; width:52px; height:52px; border-radius:999px; border:0; background:var(--ui-accent); color:#111; font-size:22px; box-shadow:0 8px 28px rgba(0,0,0,.35); cursor:pointer; }
     #panel { position:fixed; right:16px; bottom:86px; width:min(92vw,360px); background:var(--ui-card); color:var(--ui-fg); border:1px solid #2a2a2a; border-radius:16px; box-shadow:0 20px 40px rgba(0,0,0,.45); padding:12px; transform-origin:100% 100%; transform:scale(.9); opacity:0; pointer-events:none; transition:.18s ease; }
     #panel.open { transform:scale(1); opacity:1; pointer-events:auto; }
@@ -42,6 +38,16 @@
     #badge { font-size:12px; padding:2px 8px; border-radius:999px; background:#333; color:#fff; }
     #log { position:fixed; left:50%; bottom:16px; transform:translateX(-50%); background:#111; color:#fff; padding:6px 10px; border-radius:10px; font-size:12px; box-shadow:0 8px 28px rgba(0,0,0,.35); max-width:92vw; text-align:center; display:none; }
   </style>
+
+  <!-- MediaPipe Tasks Vision（グローバル版）＋フォールバック -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/vision_bundle.js"></script>
+  <script>
+    if (!('FilesetResolver' in window)) {
+      var s = document.createElement('script');
+      s.src = 'https://unpkg.com/@mediapipe/tasks-vision@0.10.3/vision_bundle.js';
+      document.head.appendChild(s);
+    }
+  </script>
 </head>
 <body>
   <div id="stage" aria-label="camera stage">
@@ -77,7 +83,7 @@
       <select id="deviceSel"></select>
     </div>
 
-    <!-- 服表示と微調整（手動） -->
+    <!-- 手動表示と微調整 -->
     <div class="row">
       <label for="showGarment">服表示</label>
       <input id="showGarment" type="checkbox" />
@@ -95,7 +101,7 @@
       <input id="scale" type="range" min="50" max="150" value="100" />
     </div>
 
-    <!-- 肩検出の状態表示（ゲート用） -->
+    <!-- 肩検出の状態表示 -->
     <div class="row">
       <label>肩検出</label>
       <span id="badge">初期化中…</span>
@@ -110,14 +116,13 @@
 
   <div id="log" role="status"></div>
 
-  <!-- モジュール：CDNフォールバック付き -->
-  <script type="module">
-    // ========= 基本状態 =========
+  <script>
+    // ===== 基本状態 =====
     let stream = null;
-    let facing = 'user'; // 'user'（イン） / 'environment'（アウト）
-    let landmarker = null;           // MediaPipe Pose
+    let facing = 'user';
+    let landmarker = null;
     let landmarkerReady = false;
-    let shoulderOK = true;           // 未対応でも手動表示できるよう true 始まり
+    let shoulderOK = true;   // 未対応でも手動表示できるよう true 始まり
     let lastVideoTime = -1;
 
     const els = {
@@ -140,7 +145,7 @@
       log: document.getElementById('log'),
     };
 
-    // ========= ユーティリティ =========
+    // ===== ユーティリティ =====
     function toast(msg, ms=2200){
       els.log.textContent = msg;
       els.log.style.display = 'block';
@@ -148,17 +153,12 @@
       els.log._t = setTimeout(()=> els.log.style.display='none', ms);
       console.info('[INFO]', msg);
     }
-    function stopStream(){
-      if(stream){
-        stream.getTracks().forEach(t=>t.stop());
-        stream = null;
-      }
-    }
+    function stopStream(){ if(stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; } }
     function updateGarmentTransform(){
       const dx = Number(els.posX.value);
       const dy = Number(els.posY.value);
       const s  = Number(els.scale.value) / 100;
-      const mirror = els.mirrorChk.checked ? -1 : 1; // ミラー時は左右反転
+      const mirror = els.mirrorChk.checked ? -1 : 1;
       els.garment.style.transform =
         `translate(-50%,-50%) scaleX(${mirror}) translate(${dx}vmin, ${dy}vmin) scale(${s})`;
     }
@@ -170,26 +170,22 @@
     function setModeLabel(){
       const isUser = facing === 'user';
       els.modeBtn.textContent = isUser ? 'イン（ミラーON）に起動中' : 'アウト（反転OFF）に起動中';
-      els.mirrorChk.checked = isUser; // 仕様：イン=ON / アウト=OFF
+      els.mirrorChk.checked = isUser;
       applyMirror();
     }
     function refreshGarmentDisplay(){
       const show = els.showGarment.checked && shoulderOK;
       els.garment.style.display = show ? 'block' : 'none';
     }
-    function setBadge(ok, text, color){
-      els.badge.textContent = text;
-      els.badge.style.background = color;
-    }
+    function setBadge(ok, text, color){ els.badge.textContent=text; els.badge.style.background=color; }
 
-    // ========= カメラ起動 =========
+    // ===== カメラ =====
     async function startCamera({ deviceId } = {}){
       try{
         stopStream();
         const constraints = deviceId
-          ? { video: { deviceId: { exact: deviceId } }, audio: false }
-          : { video: { facingMode: facing }, audio: false };
-
+          ? { video: { deviceId: { exact: deviceId } }, audio:false }
+          : { video: { facingMode: facing }, audio:false };
         stream = await navigator.mediaDevices.getUserMedia(constraints);
         els.video.srcObject = stream;
 
@@ -198,16 +194,13 @@
         const prev = els.deviceSel.value;
         els.deviceSel.innerHTML = '';
         cams.forEach(d=>{
-          const opt = document.createElement('option');
-          opt.value = d.deviceId;
-          opt.textContent = d.label || `カメラ ${els.deviceSel.length+1}`;
+          const opt=document.createElement('option');
+          opt.value=d.deviceId;
+          opt.textContent=d.label || `カメラ ${els.deviceSel.length+1}`;
           els.deviceSel.appendChild(opt);
         });
-        if(deviceId && cams.some(c=>c.deviceId===deviceId)){
-          els.deviceSel.value = deviceId;
-        }else if(cams.some(c=>c.deviceId===prev)){
-          els.deviceSel.value = prev;
-        }
+        if(deviceId && cams.some(c=>c.deviceId===deviceId)){ els.deviceSel.value = deviceId; }
+        else if(cams.some(c=>c.deviceId===prev)){ els.deviceSel.value = prev; }
 
         setModeLabel();
         toast('カメラを開始しました');
@@ -217,33 +210,32 @@
       }
     }
 
-    // ========= Tasks-Vision をCDNフォールバックで読み込む =========
-    async function loadTasksVision(){
-      const bundles = [
-        'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/vision_bundle.mjs',
-        'https://unpkg.com/@mediapipe/tasks-vision@0.10.3/vision_bundle.mjs',
-      ];
-      for(const url of bundles){
-        try{
-          const mod = await import(url);
-          const wasmBase = url.replace('/vision_bundle.mjs','/wasm');
-          return { ...mod, wasmBase };
-        }catch(e){
-          console.warn('tasks-vision load failed:', url, e);
-        }
+    // ===== vision_bundle.js のロード完了を待つ =====
+    async function waitVision(ms=8000){
+      const t0 = performance.now();
+      while(!(window.FilesetResolver && window.PoseLandmarker)){
+        if(performance.now()-t0>ms) throw new Error('tasks-vision not loaded');
+        await new Promise(r=>setTimeout(r,100));
       }
-      throw new Error('tasks-vision の読み込みに失敗しました');
     }
 
-    // ========= MediaPipe Pose 初期化 =========
+    // ===== Pose 初期化（グローバルAPI） =====
     async function initPose(){
       try{
         setBadge(false, '初期化中…', '#555');
-        const { FilesetResolver, PoseLandmarker, wasmBase } = await loadTasksVision();
-        const fileset = await FilesetResolver.forVisionTasks(wasmBase);
-        const model = `${wasmBase}/pose_landmarker_lite.task`;
-        landmarker = await PoseLandmarker.createFromOptions(fileset, {
-          baseOptions: { modelAssetPath: model },
+        await waitVision(); // ここで FilesetResolver / PoseLandmarker の到着を待つ
+
+        // 読み込めたCDNに合わせて wasm のベースURLを決定
+        const script = Array.from(document.scripts).find(s =>
+          s.src.includes('@mediapipe/tasks-vision') && s.src.endsWith('vision_bundle.js')
+        );
+        const base = script && script.src.includes('unpkg.com')
+          ? 'https://unpkg.com/@mediapipe/tasks-vision@0.10.3/wasm'
+          : 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/wasm';
+
+        const vision = await FilesetResolver.forVisionTasks(base);
+        landmarker = await PoseLandmarker.createFromOptions(vision, {
+          baseOptions: { modelAssetPath: `${base}/pose_landmarker_lite.task` },
           runningMode: 'VIDEO',
           numPoses: 1
         });
@@ -254,12 +246,12 @@
       }catch(e){
         console.warn('Pose 初期化に失敗:', e);
         landmarkerReady = false;
-        shoulderOK = true; // 検出不可でも手動表示できるように
+        shoulderOK = true; // 検出不可でも手動表示OK
         setBadge(false, '未対応（手動表示）', '#777');
       }
     }
 
-    // ========= 検出ループ（肩ゲート） =========
+    // ===== 検出ループ（肩ゲート） =====
     function tick(){
       if(!landmarkerReady || !els.video.srcObject){ requestAnimationFrame(tick); return; }
       const vtime = Math.round(els.video.currentTime * 1000);
@@ -285,54 +277,40 @@
       requestAnimationFrame(tick);
     }
 
-    // ========= イベント =========
+    // ===== イベント =====
     els.startBtn.addEventListener('click', async ()=>{
       els.startBtn.disabled = true;
-      await startCamera();          // facing='user'
+      await startCamera();
       els.startScreen.style.display = 'none';
       if(!landmarkerReady) initPose();
     });
-
-    els.toggle.addEventListener('click', ()=>{
-      els.panel.classList.toggle('open');
-    });
-
+    els.toggle.addEventListener('click', ()=> els.panel.classList.toggle('open'));
     els.modeBtn.addEventListener('click', async ()=>{
       facing = (facing === 'user') ? 'environment' : 'user';
       await startCamera();
     });
-
     els.mirrorChk.addEventListener('change', applyMirror);
-
     els.deviceSel.addEventListener('change', async ()=>{
       const id = els.deviceSel.value;
-      await startCamera({ deviceId: id });
+      await startCamera({ deviceId:id });
     });
+    els.stopBtn.addEventListener('click', ()=>{ stopStream(); toast('カメラを停止しました'); });
+    els.restartBtn.addEventListener('click', async ()=>{ await startCamera(); });
 
-    els.stopBtn.addEventListener('click', ()=>{
-      stopStream();
-      toast('カメラを停止しました');
-    });
-
-    els.restartBtn.addEventListener('click', async ()=>{
-      await startCamera();
-    });
-
-    // 服の表示と微調整（手動）
     els.showGarment.addEventListener('change', refreshGarmentDisplay);
     [els.posX, els.posY, els.scale].forEach(el=>{
       el.addEventListener('input', updateGarmentTransform);
     });
 
-    // ========= 初期化 =========
+    // ===== 初期化 =====
     updateGarmentTransform();
     refreshGarmentDisplay();
+
     (async ()=>{
       try{
-        const res = await fetch('garments.json', { cache: 'no-store' });
+        const res = await fetch('garments.json', { cache:'no-store' });
         if(!res.ok) throw new Error(res.status);
-        const data = await res.json();
-        console.log('garments.json loaded:', data);
+        console.log('garments.json loaded:', await res.json());
       }catch(e){
         console.warn('garments.json が読み込めません。', e);
         toast('garments.json が見つかりません（あとで置けばOK）');
@@ -341,4 +319,3 @@
   </script>
 </body>
 </html>
-
