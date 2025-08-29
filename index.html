@@ -5,57 +5,26 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>starter01 | Camera Base</title>
   <style>
-    :root{ --ui-bg:#111; --ui-card:#1a1a1a; --ui-fg:#fff; --ui-accent:#4ade80; --hint:#0ea5e9; }
+    :root{ --ui-fg:#eaeaea; --ui-accent:#4ade80; }
     *{ box-sizing:border-box }
     html,body{ height:100%; margin:0 }
-    body{ background:#000; color:#eaeaea; font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif }
+    body{ background:#000; color:var(--ui-fg); font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif }
 
+    /* ステージ */
     #stage{ position:relative; width:100vw; height:100vh; overflow:hidden; background:#000 }
-    #video{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; background:#000; }
-    .mirror{ transform: scaleX(-1); }
+    #video{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; background:#000 }
+    .mirror{ transform:scaleX(-1) }
 
+    /* 服PNG */
     #garment{
-      position:absolute; left:50%; top:50%;
-      transform:translate(-50%,-50%);
-      display:none; pointer-events:none;
-      opacity:0; transition:opacity .22s ease;
+      position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
+      display:none; pointer-events:none; opacity:0; transition:opacity .22s ease;
       will-change:left,top,width,opacity;
     }
 
-    #startScreen{ position:absolute; inset:0; display:grid; place-items:center; background:rgba(0,0,0,.45); }
-    #startCard{
-      background:#111; color:#eaeaea; padding:24px 28px; border-radius:16px;
-      width:min(92vw,520px); box-shadow:0 8px 32px rgba(0,0,0,.35);
-    }
-    #startCard h1{ margin:0 0 10px; font-size:22px }
-    #startCard p{ margin:10px 0 14px; line-height:1.7; opacity:.9 }
-    .btn{ appearance:none; border:0; border-radius:10px; padding:12px 16px; font-weight:700; cursor:pointer }
-    .btn.primary{ background:var(--ui-accent); color:#053 }
-    .btn.ghost{ background:#222; color:#eaeaea }
-
-    /* 透過パネル（簡素UI） */
-    #panel{
-      position:absolute; right:18px; bottom:86px; width:320px; max-width:92vw;
-      background:rgba(15,15,15,.35); color:#eaeaea; border-radius:16px;
-      box-shadow:0 8px 32px rgba(0,0,0,.25); padding:14px 14px 12px;
-      display:none; backdrop-filter: blur(12px);
-    }
-    #panel.open{ display:block }
-    #panel h2{ font-size:14px; margin:2px 0 10px; opacity:.9 }
-    .row{ display:grid; grid-template-columns:1fr 1fr; gap:8px; align-items:center; margin:8px 0 }
-    .row > label{ font-size:12px; opacity:.95 }
-    select,input[type="range"]{ width:100% }
-
-    #toggle{
-      position:absolute; right:20px; bottom:20px; width:48px; height:48px; border-radius:50%;
-      display:grid; place-items:center; background:#10b981; color:#002; font-weight:800; cursor:pointer;
-      box-shadow:0 6px 24px rgba(0,0,0,.35);
-    }
-
-    /* PCゲート（スマホ専用案内） */
+    /* PCゲート（スマホのみ対応） */
     #pcGate{
-      position:absolute; inset:0; display:none; place-items:center; background:#0a0a0acc; z-index:10;
-      text-align:center; padding:24px;
+      position:absolute; inset:0; display:none; place-items:center; background:#0a0a0acc; z-index:10; text-align:center; padding:24px;
     }
     #pcGate .card{
       background:#111; color:#eaeaea; padding:24px 28px; border-radius:16px; width:min(92vw,560px);
@@ -63,6 +32,33 @@
     }
     #pcGate h1{ margin:0 0 8px; font-size:22px }
     #pcGate p{ margin:8px 0 0; line-height:1.7; opacity:.9 }
+
+    /* スタート */
+    #startScreen{ position:absolute; inset:0; display:grid; place-items:center; background:rgba(0,0,0,.45) }
+    #startCard{ background:#111; color:#eaeaea; padding:24px 28px; border-radius:16px; width:min(92vw,520px); box-shadow:0 8px 32px rgba(0,0,0,.35) }
+    #startCard h1{ margin:0 0 10px; font-size:22px }
+    #startCard p{ margin:10px 0 14px; line-height:1.7; opacity:.9 }
+    .btn{ appearance:none; border:0; border-radius:10px; padding:12px 16px; font-weight:700; cursor:pointer }
+    .btn.primary{ background:var(--ui-accent); color:#053 }
+    .btn.ghost{ background:#222; color:#eaeaea }
+
+    /* 透過パネル */
+    #panel{
+      position:absolute; right:18px; bottom:86px; width:320px; max-width:92vw;
+      background:rgba(15,15,15,.35); color:#eaeaea; border-radius:16px; padding:14px 14px 12px;
+      display:none; backdrop-filter: blur(12px); box-shadow:0 8px 32px rgba(0,0,0,.25)
+    }
+    #panel.open{ display:block }
+    #panel h2{ font-size:14px; margin:2px 0 10px; opacity:.9 }
+    .row{ display:grid; grid-template-columns:1fr 1fr; gap:8px; align-items:center; margin:8px 0 }
+    .row>label{ font-size:12px; opacity:.95 }
+    input[type="number"],select,input[type="range"]{ width:100% }
+
+    /* 浮遊ボタン */
+    #toggle{
+      position:absolute; right:20px; bottom:20px; width:48px; height:48px; border-radius:50%;
+      display:grid; place-items:center; background:#10b981; color:#002; font-weight:800; cursor:pointer; box-shadow:0 6px 24px rgba(0,0,0,.35)
+    }
 
     @media (max-width:420px){
       #panel{ right:12px; bottom:76px }
@@ -75,12 +71,11 @@
     <video id="video" autoplay playsinline muted></video>
     <img id="garment" alt="garment" src="public/garments/trainer.png" />
 
-    <!-- スマホ専用案内（PCでのみ表示） -->
+    <!-- PCでは案内だけ表示 -->
     <div id="pcGate">
       <div class="card">
         <h1>スマホのみ対応の体験です 📱</h1>
-        <p>このページはスマートフォン（iOS/Android）のブラウザでご利用ください。<br>
-           PCでは動作を案内のみ表示します。</p>
+        <p>このページはスマートフォン（iOS/Android）のブラウザでご利用ください。<br>PCでは動作の案内のみを表示します。</p>
       </div>
     </div>
 
@@ -90,11 +85,11 @@
         <h1>カメラの準備をします</h1>
         <p>「カメラを開始」を押すと、ブラウザからカメラ許可を聞かれます。<br>インカメで開始し、ミラー表示（左右反転）になります。</p>
         <button id="startBtn" class="btn primary">カメラを開始</button>
-        <p class="hint">※ 右下の⚙で「アウト/ミラーOFF」へ切替できます。</p>
+        <p class="hint" style="font-size:11px;opacity:.85">※ 右下の⚙で「アウト/ミラーOFF」へ切替できます。</p>
       </div>
     </div>
 
-    <!-- 設定（簡素版） -->
+    <!-- 設定 -->
     <div id="panel" role="dialog" aria-modal="false" aria-label="設定">
       <h2>設定</h2>
 
@@ -102,20 +97,18 @@
         <label>カメラ</label>
         <button id="modeBtn" type="button" class="btn ghost" style="padding:8px 10px">イン（ミラーON）に起動中</button>
       </div>
-
       <div class="row">
         <label>ミラー</label>
         <input id="mirrorChk" type="checkbox" checked />
       </div>
-
       <div class="row">
         <label>デバイス</label>
         <select id="devicesSel"></select>
       </div>
 
       <div class="row">
-        <label>サイズ調整</label>
-        <input id="sizeAdj" type="range" min="70" max="140" value="110" />
+        <label>ユーザー肩幅 (cm)</label>
+        <input id="userShoulder" type="number" min="20" max="70" step="0.5" placeholder="例: 42.0" />
       </div>
 
       <div class="row">
@@ -132,7 +125,9 @@
         <button id="restartBtn" class="btn ghost">再起動</button>
       </div>
 
-      <p class="hint">肩/腕が入る状態だと自動で表示（見失っても少し保持）。</p>
+      <p class="hint" style="font-size:11px;opacity:.85">
+        肩/腕が入る状態だと自動で表示（見失っても少し保持）。ユーザー肩幅が未入力の場合は、商品の胸囲/肩幅の比で自動スケールします。
+      </p>
     </div>
 
     <button id="toggle" title="設定">⚙</button>
@@ -142,32 +137,30 @@
     import * as vision from './vendor/mediapipe/vision_bundle.mjs';
     const WASM_BASE = './vendor/mediapipe/wasm/';
 
+    /* 要素 */
     const els = {
       stage: stage, video: video, garment: garment,
-      startScreen: startScreen, startBtn: startBtn,
-      pcGate: pcGate, toggle: toggle, panel: panel,
-      modeBtn: modeBtn, mirrorChk: mirrorChk, devicesSel: devicesSel,
-      sizeAdj: sizeAdj, offX: offX, offY: offY,
-      stopBtn: stopBtn, restartBtn: restartBtn,
+      pcGate: pcGate, startScreen: startScreen, startBtn: startBtn,
+      toggle: toggle, panel: panel, modeBtn: modeBtn, mirrorChk: mirrorChk, devicesSel: devicesSel,
+      userShoulder: userShoulder, offX: offX, offY: offY, stopBtn: stopBtn, restartBtn: restartBtn
     };
 
-    /* ご指定の値 + 縦少し上げ（0.30） */
-    const ALPHA_POS   = 0.16;
-    const ALPHA_SCALE = 0.12;
-    const HOLD_MS     = 600;
-    const ANCHOR_Y_FRAC = 0.33;  // 0.28→0.30（少し上）
-    const DROP_K      = 0.14;
+    /* 調整パラメータ（確定値） */
+    const ALPHA_POS   = 0.16;  // 位置スムージング
+    const ALPHA_SCALE = 0.12;  // スケールスムージング
+    const HOLD_MS     = 600;   // 一時未検出ホールド
+    const ANCHOR_Y_FRAC = 0.33; // ←ご指定版
+    const DROP_K      = 0.14;  // 肩幅に対するドロップ割合
 
+    /* 状態 */
     let stream=null, currentDeviceId=null, facing='user', mirror=true;
     let landmarker=null, fileset=null;
-
     let lastDetMS=0, smX=null, smY=null, smS=1;
-    let sizeAdjFactor=1.10;      // スライダー既定=110%
-
     let garmentNatW=0, garmentNatH=0;
-    let garmentConf=null;        // garments.json から（無くても動く）
+    let garmentConf=null;           // garments.json から
     let autoDropPx=0;
 
+    /* 画像ロード時に自然サイズ取得 */
     garment.addEventListener('load', ()=>{
       garmentNatW = garment.naturalWidth  || garment.width  || 1000;
       garmentNatH = garment.naturalHeight || garment.height || 1000;
@@ -180,7 +173,7 @@
     const isMobile = /iPhone|Android.+Mobile|iPad|iPod/i.test(navigator.userAgent);
     if(!isMobile){
       els.pcGate.style.display='grid';
-      els.startBtn.disabled = true;
+      els.startBtn.disabled=true;
     }
 
     async function listVideoDevices(){
@@ -224,13 +217,13 @@
       try{
         fileset = await vision.FilesetResolver.forVisionTasks(WASM_BASE);
         landmarker = await vision.PoseLandmarker.createFromOptions(fileset,{
-          baseOptions:{ modelAssetPath: `${WASM_BASE}pose_landmarker_lite.task` },
+          baseOptions:{ modelAssetPath:`${WASM_BASE}pose_landmarker_lite.task` },
           runningMode:'VIDEO', numPoses:1,
           minPoseDetectionConfidence:0.5, minPosePresenceConfidence:0.5, minTrackingConfidence:0.5,
         });
       }catch(e){
         console.error('Pose 初期化エラー:', e);
-        alert('姿勢検出の初期化に失敗しました（ファイル配置やパスを確認してください）');
+        alert('姿勢検出の初期化に失敗しました（ファイル配置やパスをご確認ください）');
       }
     }
 
@@ -245,37 +238,55 @@
       }
     }
 
+    /* スケール＆描画 */
     function updateGarmentTransform(){
-      if(garmentNatW===0) return; // 画像ロード前のみ停止（←confが無くても続行）
+      if(garmentNatW===0) return;
 
-      // 自動フィット（常時ON）。confが無い時は sAuto=1 として動作。
-      let sAuto = 1;
-      if(updateGarmentTransform._shoulderPX){
-        const pxChestHint = (garmentConf && garmentConf.px_chest_hint) ? garmentConf.px_chest_hint : 980;
-        let targetChestPx = updateGarmentTransform._shoulderPX;
-        if(garmentConf?.chest_cm && garmentConf?.shoulder_cm){
-          targetChestPx *= (garmentConf.chest_cm / garmentConf.shoulder_cm);
+      // 肩幅px（直近検出）
+      const shoulderPX = updateGarmentTransform._shoulderPX || null;
+
+      // garments.json 値
+      const pxChestHint = garmentConf?.px_chest_hint ?? 980;
+      const gChestCm    = garmentConf?.chest_cm     ?? null;
+      const gShoulderCm = garmentConf?.shoulder_cm  ?? null;
+
+      // ユーザー肩幅(cm) 入力
+      const userShoulderCm = parseFloat(els.userShoulder.value) || parseFloat(localStorage.getItem('user_shoulder_cm')) || null;
+
+      // 目標の「胸幅(px)」を決める
+      let targetChestPx = null;
+      if(shoulderPX){
+        if(userShoulderCm && gChestCm){
+          // ① 実寸キャリブレーション：ユーザー肩幅に対して商品の胸囲を反映
+          targetChestPx = shoulderPX * (gChestCm / userShoulderCm);
+        }else if(gChestCm && gShoulderCm){
+          // ② ユーザー未入力：商品 chest/shoulder 比でスケール維持
+          targetChestPx = shoulderPX * (gChestCm / gShoulderCm);
+        }else{
+          // ③ 最小限（比情報なし）：肩幅に合わせるのみ
+          targetChestPx = shoulderPX;
         }
-        sAuto = (pxChestHint>0) ? (targetChestPx / pxChestHint) : 1;
       }
 
-      // スライダーは最終倍率（必ず効く）
-      let s = sAuto * sizeAdjFactor;
+      // スケール係数（自然幅→描画幅）
+      let s = 1;
+      if(targetChestPx && pxChestHint>0){
+        s = targetChestPx / pxChestHint;
+      }
 
       // スムージング
       smS = smS==null ? s : lerp(smS, s, ALPHA_SCALE);
 
-      // 位置
+      // 位置（肩中心）
       const W = els.stage.clientWidth, H = els.stage.clientHeight;
       const cx = updateGarmentTransform._cx ?? (W/2);
       const cy = updateGarmentTransform._cy ?? (H/2);
       smX = smX==null ? cx : lerp(smX, cx, ALPHA_POS);
       smY = smY==null ? cy : lerp(smY, cy, ALPHA_POS);
 
-      // クランプを撤廃（スライダーの反応を保証）
+      // 描画
       const drawW = garmentNatW * smS;
       const drawH = garmentNatH * smS;
-
       const desiredY = smY + autoDropPx;
       const anchorOffset = (0.5 - ANCHOR_Y_FRAC) * drawH;
 
@@ -312,7 +323,7 @@
       }catch(e){ console.warn('pose detect error:', e); }
 
       const hold = (now - lastDetMS) < HOLD_MS;
-      const wantShow = ok || hold;
+      const wantShow = ok || hold; // 自動のみ
       els.garment.style.display = wantShow ? 'block' : 'none';
       els.garment.style.opacity = wantShow ? '1' : '0';
 
@@ -332,11 +343,15 @@
     mirrorChk.addEventListener('change', ()=>{ mirror = !!mirrorChk.checked; applyMirror(); });
     devicesSel.addEventListener('change', async ()=>{ currentDeviceId = devicesSel.value || null; await restartCamera(); });
 
-    ['offX','offY','sizeAdj'].forEach(id=>{
-      document.getElementById(id).addEventListener('input', ()=>{
-        if(id==='sizeAdj'){ sizeAdjFactor = (parseFloat(sizeAdj.value)||100)/100; }
-        updateGarmentTransform();
-      });
+    // ユーザー肩幅はローカル保存（自動スケールに使用）
+    userShoulder.addEventListener('input', ()=>{
+      const v = parseFloat(userShoulder.value);
+      if(!isNaN(v) && v>0){ localStorage.setItem('user_shoulder_cm', String(v)); }
+      updateGarmentTransform();
+    });
+
+    ['offX','offY'].forEach(id=>{
+      document.getElementById(id).addEventListener('input', updateGarmentTransform);
     });
 
     startBtn.addEventListener('click', startCamera);
@@ -344,10 +359,13 @@
     restartBtn.addEventListener('click', restartCamera);
     window.addEventListener('resize', ()=>{ smX=null; smY=null; updateGarmentTransform(); });
 
+    // 初期ロード
     (async ()=>{
       mirrorChk.checked = mirror;
       modeBtn.textContent = 'イン（ミラーON）に起動中';
-      await loadGarmentConfig();   // 失敗してもサイズ調整は効く
+      const saved = parseFloat(localStorage.getItem('user_shoulder_cm'));
+      if(!isNaN(saved)) userShoulder.value = saved;
+      await loadGarmentConfig();
     })();
   </script>
 </body>
