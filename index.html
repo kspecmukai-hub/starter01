@@ -15,11 +15,12 @@
     #video{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; background:#000 }
     .mirror{ transform:scaleX(-1) }
 
-    /* 服PNG */
+    /* 服PNG（回転なし） */
     #garment{
-      position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
+      position:absolute; left:50%; top:50%;
+      transform:translate(-50%,-50%); /* ←JSでmirror時はscaleX(-1)を付与 */
       display:none; pointer-events:none; opacity:0; transition:opacity .22s ease;
-      will-change:left,top,width,opacity;
+      will-change:left,top,width,opacity,transform;
     }
 
     /* PCゲート（スマホのみ対応） */
@@ -42,7 +43,7 @@
     .btn.primary{ background:var(--ui-accent); color:#053 }
     .btn.ghost{ background:#222; color:#eaeaea }
 
-    /* 設定パネル（透過アップ & ぼかし） */
+    /* 設定パネル（透過 & ぼかし） */
     #panel{
       position:absolute; right:18px; bottom:86px; width:320px; max-width:92vw;
       background:rgba(15,15,15,.18); color:#eaeaea; border-radius:16px; padding:14px 14px 12px;
@@ -124,10 +125,6 @@
         <button id="stopBtn" class="btn ghost">停止</button>
         <button id="restartBtn" class="btn ghost">再起動</button>
       </div>
-
-      <p class="hint" style="font-size:11px;opacity:.85">
-        肩/腕が入る状態だと自動で表示（見失っても少し保持）。ユーザー肩幅が未入力の場合は、商品の胸囲/肩幅の比で自動スケールします。
-      </p>
     </div>
 
     <button id="toggle" title="設定">⚙</button>
@@ -137,7 +134,7 @@
     import * as vision from './vendor/mediapipe/vision_bundle.mjs';
     const WASM_BASE = './vendor/mediapipe/wasm/';
 
-    /* ========= OneEuro Filter ========= */
+    /* ========= OneEuro Filter（位置・スケールのみ） ========= */
     class LowPass{
       constructor(alpha, initVal=null){ this.a=alpha; this.y=initVal; this.s=(initVal!==null); }
       filter(v){ if(!this.s){ this.y=v; this.s=true; return v; } this.y = this.a*v + (1-this.a)*this.y; return this.y; }
@@ -160,7 +157,6 @@
         return this.x.filter(v);
       }
     }
-    /* 推奨係数（必要なら後で微調整） */
     const ONEURO_POS   = { mincutoff:1.2, beta:0.020, dcutoff:1.0 };
     const ONEURO_SCALE = { mincutoff:1.0, beta:0.010, dcutoff:1.0 };
 
@@ -177,9 +173,9 @@
     };
 
     /* ========= 調整パラメータ ========= */
-    const HOLD_MS       = 600;  // 一時未検出ホールド
-    const ANCHOR_Y_FRAC = 0.33; // ご指定値（肩ライン）
-    const DROP_K        = 0.14; // 肩幅に対するドロップ割合
+    const HOLD_MS       = 600;   // 一時未検出ホールド
+    const ANCHOR_Y_FRAC = 0.33;  // 肩ライン（ご指定値）
+    const DROP_K        = 0.14;  // 肩幅に対するドロップ割合
 
     /* ========= 状態 ========= */
     let stream=null, currentDeviceId=null, facing='user', mirror=true;
@@ -210,8 +206,8 @@
     }
 
     function applyMirror(){
-      els.video.classList.toggle('mirror', mirror);
-      els.garment.classList.toggle('mirror', mirror);
+      els.video.classList.toggle('mirror', mirror);  // ←動画だけclassで反転
+      updateGarmentTransform();                      // ←服はtransform文字列で反映
     }
 
     async function startCamera(){
@@ -262,10 +258,9 @@
       }
     }
 
-    /* ========= スケール＆描画（OneEuro 適用） ========= */
+    /* ========= スケール＆描画（OneEuro） ========= */
     function updateGarmentTransform(){
       if(garmentNatW===0) return;
-
       const t = performance.now()/1000;
 
       // 肩幅px（直近検出）
@@ -291,30 +286,38 @@
         }
       }
 
-      // 自然→描画のスケール（OneEuroで平滑化）
+      // スケール（OneEuro）
       let s = 1;
       if(targetChestPx && pxChestHint>0){ s = targetChestPx / pxChestHint; }
       const smS = euroS.filter(s, t);
 
-      // 位置（肩中心 → OneEuro）
+      // 位置（OneEuro）
       const W = els.stage.clientWidth, H = els.stage.clientHeight;
       const rawX = updateGarmentTransform._cx ?? (W/2);
       const rawY = updateGarmentTransform._cy ?? (H/2);
       const smX  = euroX.filter(rawX, t);
       const smY  = euroY.filter(rawY, t);
 
-      // 描画
+      // 描画寸法
       const drawW = garmentNatW * smS;
       const drawH = garmentNatH * smS;
+
+      // 肩ライン（ANCHOR_Y_FRAC）を smY（＋ドロップ）に一致
       const desiredY = smY + autoDropPx;
       const anchorOffset = (0.5 - ANCHOR_Y_FRAC) * drawH;
 
       const offX = parseInt(els.offX.value,10) || 0;
       const offY = parseInt(els.offY.value,10) || 0;
 
+      // 位置
       els.garment.style.width = `${drawW}px`;
       els.garment.style.left  = `${smX + offX}px`;
       els.garment.style.top   = `${desiredY + anchorOffset + offY}px`;
+
+      // 変形（回転なし・mirrorのみ反映）
+      let tf = `translate(-50%,-50%)`;
+      if(mirror) tf += ' scaleX(-1)';
+      els.garment.style.transform = tf;
     }
 
     async function tick(){
@@ -330,16 +333,20 @@
           if(L && R){
             let cx = (L.x + R.x)/2 * W;
             let cy = (L.y + R.y)/2 * H;
-            if(mirror){ cx = W - cx; }
+            if(mirror){ cx = W - cx; } // 見た目に合わせる
             const shoulderPX = Math.abs(R.x - L.x) * W;
+
             updateGarmentTransform._shoulderPX = shoulderPX;
             autoDropPx = shoulderPX * DROP_K;
             updateGarmentTransform._cx = cx;
             updateGarmentTransform._cy = cy;
+
             lastDetMS = now; ok=true;
           }
         }
-      }catch(e){ console.warn('pose detect error:', e); }
+      }catch(e){
+        console.warn('pose detect error:', e);
+      }
 
       const hold = (now - lastDetMS) < HOLD_MS;
       const wantShow = ok || hold; // 自動のみ
