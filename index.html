@@ -15,7 +15,7 @@
     #video { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; background:#000; }
     .mirror { transform: scaleX(-1); } /* 動画の左右反転に使用 */
 
-    /* 服PNG（手動表示用。次ステップで自動追従に拡張） */
+    /* 服PNG（手動表示＋検出ゲート） */
     #garment {
       position:absolute; top:50%; left:50%;
       transform:translate(-50%,-50%); /* JSで上書き */
@@ -39,6 +39,7 @@
     .row label { min-width:90px; font-size:14px; opacity:.9; }
     .row select, .row button, .row input[type="checkbox"] { font-size:14px; }
     .hint { margin:6px; font-size:12px; opacity:.7; }
+    #badge { font-size:12px; padding:2px 8px; border-radius:999px; background:#333; color:#fff; }
     #log { position:fixed; left:50%; bottom:16px; transform:translateX(-50%); background:#111; color:#fff; padding:6px 10px; border-radius:10px; font-size:12px; box-shadow:0 8px 28px rgba(0,0,0,.35); max-width:92vw; text-align:center; display:none; }
   </style>
 </head>
@@ -58,7 +59,7 @@
 
   <button id="toggle" title="設定">⚙</button>
 
-  <!-- 設定パネル（フル差し替え済み） -->
+  <!-- 設定パネル -->
   <div id="panel" role="dialog" aria-modal="false" aria-label="設定">
     <h2>設定</h2>
 
@@ -77,7 +78,7 @@
       <select id="deviceSel"></select>
     </div>
 
-    <!-- 服表示と微調整 -->
+    <!-- 服表示と微調整（手動） -->
     <div class="row">
       <label for="showGarment">服表示</label>
       <input id="showGarment" type="checkbox" />
@@ -95,19 +96,31 @@
       <input id="scale" type="range" min="50" max="150" value="100" />
     </div>
 
+    <!-- 肩検出の状態表示（ゲート用） -->
+    <div class="row">
+      <label>肩検出</label>
+      <span id="badge">初期化中…</span>
+    </div>
+
     <div class="row">
       <button id="stopBtn" type="button">停止</button>
       <button id="restartBtn" type="button">再起動</button>
     </div>
-    <p class="hint">今日は「カメラ表示の土台」＋「手動で服PNG表示」まで。次の一歩で肩検出を追加します。</p>
+    <p class="hint">肩が映っている時だけ自動で表示（手動ONとのAND）。検出できない環境では手動表示を維持します。</p>
   </div>
 
   <div id="log" role="status"></div>
 
-  <script>
+  <!-- 以降はモジュールスクリプト：MediaPipeをCDNから読み込み -->
+  <script type="module">
     // ========= 基本状態 =========
     let stream = null;
     let facing = 'user'; // 'user'（イン） / 'environment'（アウト）
+    let landmarker = null;           // MediaPipe Pose
+    let landmarkerReady = false;
+    let shoulderOK = true;           // 既定は true（検出未対応でも手動表示できるように）
+    let lastVideoTime = -1;
+
     const els = {
       video: document.getElementById('video'),
       garment: document.getElementById('garment'),
@@ -124,6 +137,7 @@
       scale: document.getElementById('scale'),
       stopBtn: document.getElementById('stopBtn'),
       restartBtn: document.getElementById('restartBtn'),
+      badge: document.getElementById('badge'),
       log: document.getElementById('log'),
     };
 
@@ -159,6 +173,15 @@
       els.modeBtn.textContent = isUser ? 'イン（ミラーON）に起動中' : 'アウト（反転OFF）に起動中';
       els.mirrorChk.checked = isUser; // 仕様：イン=ON / アウト=OFF
       applyMirror();
+    }
+    function refreshGarmentDisplay(){
+      // 手動スイッチがON かつ 肩が検出できている時のみ表示
+      const show = els.showGarment.checked && shoulderOK;
+      els.garment.style.display = show ? 'block' : 'none';
+    }
+    function setBadge(state, text, color){
+      els.badge.textContent = text;
+      els.badge.style.background = color;
     }
 
     // ========= カメラ起動 =========
@@ -199,11 +222,68 @@
       }
     }
 
+    // ========= MediaPipe Pose 初期化 =========
+    async function initPose(){
+      try{
+        setBadge(false, '初期化中…', '#555');
+        const { FilesetResolver, PoseLandmarker } =
+          await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3');
+        const fileset = await FilesetResolver.forVisionTasks(
+          'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/wasm'
+        );
+        landmarker = await PoseLandmarker.createFromOptions(fileset, {
+          baseOptions: {
+            modelAssetPath:
+              'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/wasm/pose_landmarker_lite.task'
+          },
+          runningMode: 'VIDEO',
+          numPoses: 1
+        });
+        landmarkerReady = true;
+        setBadge(true, '検出準備OK', '#2ea043'); // 緑
+        toast('肩検出の準備ができました');
+        requestAnimationFrame(tick);
+      }catch(e){
+        console.warn('Pose 初期化に失敗:', e);
+        landmarkerReady = false;
+        shoulderOK = true; // 検出不可でも手動表示できるように
+        setBadge(false, '未対応（手動表示）', '#777');
+      }
+    }
+
+    // ========= 検出ループ（肩ゲート） =========
+    function tick(timestamp){
+      if(!landmarkerReady || !els.video.srcObject){ requestAnimationFrame(tick); return; }
+      const vtime = Math.round(els.video.currentTime * 1000);
+      if(vtime === lastVideoTime){ requestAnimationFrame(tick); return; }
+      lastVideoTime = vtime;
+
+      const result = landmarker.detectForVideo(els.video, performance.now());
+      let ok = false;
+      if(result?.landmarks?.length){
+        const lm = result.landmarks[0];
+        const L = lm[11]; // 左肩
+        const R = lm[12]; // 右肩
+        if(L && R){
+          const vis = (('visibility' in L ? L.visibility : 1) > 0.5) &&
+                      (('visibility' in R ? R.visibility : 1) > 0.5);
+          const inFrame = L.y>0 && L.y<1 && R.y>0 && R.y<1;
+          ok = vis && inFrame;
+        }
+      }
+      shoulderOK = ok;
+      setBadge(ok, ok ? '検出中' : '未検出', ok ? '#2ea043' : '#555');
+      refreshGarmentDisplay();
+      requestAnimationFrame(tick);
+    }
+
     // ========= イベント =========
     els.startBtn.addEventListener('click', async ()=>{
       els.startBtn.disabled = true;
       await startCamera();          // facing='user' で起動
       els.startScreen.style.display = 'none';
+      // カメラ開始後に検出ループ（初期化未済なら初期化）
+      if(!landmarkerReady) initPose();
     });
 
     els.toggle.addEventListener('click', ()=>{
@@ -215,7 +295,9 @@
       await startCamera();
     });
 
-    els.mirrorChk.addEventListener('change', applyMirror);
+    els.mirrorChk.addEventListener('change', ()=>{
+      applyMirror();
+    });
 
     els.deviceSel.addEventListener('change', async ()=>{
       const id = els.deviceSel.value;
@@ -231,18 +313,15 @@
       await startCamera();
     });
 
-    // 服の表示と微調整
-    els.showGarment.addEventListener('change', ()=>{
-      els.garment.style.display = els.showGarment.checked ? 'block' : 'none';
-    });
+    // 服の表示と微調整（手動）
+    els.showGarment.addEventListener('change', refreshGarmentDisplay);
     [els.posX, els.posY, els.scale].forEach(el=>{
       el.addEventListener('input', updateGarmentTransform);
     });
 
     // ========= 初期化 =========
     updateGarmentTransform();            // スライダー初期値を反映
-    els.garment.style.display = 'none';  // 初期は非表示
-
+    refreshGarmentDisplay();             // 初期の表示状態
     // garments.json の存在チェック（将来のため）
     (async ()=>{
       try{
