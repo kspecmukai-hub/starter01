@@ -1,27 +1,4 @@
 {
-  "defaults": {
-    "anchorY": 0.33,
-    "dropK": 0.14,
-    "pos":   { "mincutoff": 1.2, "beta": 0.020, "dcutoff": 1.0 },
-    "scale": { "mincutoff": 1.0, "beta": 0.010, "dcutoff": 1.0 }
-  },
-  "models": [
-    {
-      "match": "iPhone",            // iPhone全般（機種名が出ない想定）
-      "anchorY": 0.335,
-      "dropK": 0.13
-    },
-    {
-      "match": "Pixel",             // Pixel全般（7/8など含む）
-      "anchorY": 0.34,
-      "dropK": 0.145,
-      "pos":   { "mincutoff": 1.3, "beta": 0.018, "dcutoff": 1.0 }
-    },
-    {
-      "match": "SM-|Galaxy",        // Galaxy系（UAにSM-やGalaxyを含む）
-      "anchorY": 0.335,
-      "dropK": 0.145,
-      "scale": { "mincutoff": 1.0, "beta": 0.008, "dcutoff": 1.0 }
-    }
-  ]
+  "defaults": { "anchorY": 0.33, "dropK": 0.14 },
+  "models": []
 }
