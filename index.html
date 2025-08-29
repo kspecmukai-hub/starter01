@@ -6,27 +6,42 @@
   <title>starter01 | Camera Base</title>
   <style>
     :root { --ui-bg:#111; --ui-card:#1a1a1a; --ui-fg:#fff; --ui-accent:#4ade80; }
-    * { box-sizing:border-box; }
-    html,body{height:100%;margin:0}
-    body{background:#000;color:#eaeaea;font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
-    #stage{position:relative;width:100vw;height:100vh;overflow:hidden;background:#000}
-    #video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#000}
-    .mirror{transform:scaleX(-1)}
-    #garment{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);max-width:60vmin;display:none;pointer-events:none}
-    #startScreen{position:absolute;inset:0;display:grid;place-items:center;background:rgba(0,0,0,.55)}
-    #startCard{background:#fff;color:#111;padding:20px 24px;border-radius:16px;width:min(92vw,520px);box-shadow:0 8px 32px rgba(0,0,0,.35)}
-    #startCard h1{margin:0 0 10px;font-size:20px}
-    #startCard p{margin:0 0 14px;line-height:1.6}
-    #startBtn{width:100%;padding:12px 16px;border-radius:12px;border:0;font-size:16px;cursor:pointer;background:#111;color:#fff}
-    #toggle{position:fixed;right:16px;bottom:16px;width:52px;height:52px;border-radius:999px;border:0;background:var(--ui-accent);color:#111;font-size:22px;box-shadow:0 8px 28px rgba(0,0,0,.35);cursor:pointer}
-    #panel{position:fixed;right:16px;bottom:86px;width:min(92vw,360px);background:var(--ui-card);color:var(--ui-fg);border:1px solid #2a2a2a;border-radius:16px;box-shadow:0 20px 40px rgba(0,0,0,.45);padding:12px;transform-origin:100% 100%;transform:scale(.9);opacity:0;pointer-events:none;transition:.18s ease}
-    #panel.open{transform:scale(1);opacity:1;pointer-events:auto}
-    #panel h2{margin:4px 6px 10px;font-size:14px;font-weight:600;opacity:.9}
-    .row{display:flex;align-items:center;gap:8px;margin:8px 6px}
-    .row label{min-width:90px;font-size:14px;opacity:.9}
-    .hint{margin:6px;font-size:12px;opacity:.7}
-    #badge{font-size:12px;padding:2px 8px;border-radius:999px;background:#333;color:#fff}
-    #log{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);background:#111;color:#fff;padding:6px 10px;border-radius:10px;font-size:12px;box-shadow:0 8px 28px rgba(0,0,0,.35);max-width:92vw;text-align:center;display:none}
+    *{ box-sizing:border-box }
+    html,body{ height:100%; margin:0 }
+    body{ background:#000; color:#eaeaea; font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif }
+
+    /* ステージ */
+    #stage{ position:relative; width:100vw; height:100vh; overflow:hidden; background:#000 }
+    #video{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; background:#000 }
+    .mirror{ transform:scaleX(-1) } /* 画面の左右反転に使用 */
+
+    /* 服PNG（肩追従・フェードイン対応） */
+    #garment{
+      position:absolute; top:50%; left:50%;
+      transform:translate(-50%,-50%); max-width:60vmin;
+      pointer-events:none;
+      opacity:0; transition:opacity .22s ease; /* フェード */
+    }
+    #garment.on{ opacity:1 } /* 表示時に付与 */
+
+    /* スタート画面 */
+    #startScreen{ position:absolute; inset:0; display:grid; place-items:center; background:rgba(0,0,0,.55) }
+    #startCard{ background:#fff; color:#111; padding:20px 24px; border-radius:16px; width:min(92vw,520px); box-shadow:0 8px 32px rgba(0,0,0,.35) }
+    #startCard h1{ margin:0 0 10px; font-size:20px }
+    #startCard p{ margin:0 0 14px; line-height:1.6 }
+    #startBtn{ width:100%; padding:12px 16px; border-radius:12px; border:0; font-size:16px; cursor:pointer; background:#111; color:#fff }
+
+    /* 右下トグル & パネル */
+    #toggle{ position:fixed; right:16px; bottom:16px; width:52px; height:52px; border-radius:999px; border:0; background:var(--ui-accent); color:#111; font-size:22px; box-shadow:0 8px 28px rgba(0,0,0,.35); cursor:pointer }
+    #panel{ position:fixed; right:16px; bottom:86px; width:min(92vw,360px); background:var(--ui-card); color:var(--ui-fg); border:1px solid #2a2a2a; border-radius:16px; box-shadow:0 20px 40px rgba(0,0,0,.45); padding:12px; transform-origin:100% 100%; transform:scale(.9); opacity:0; pointer-events:none; transition:.18s ease }
+    #panel.open{ transform:scale(1); opacity:1; pointer-events:auto }
+    #panel h2{ margin:4px 6px 10px; font-size:14px; font-weight:600; opacity:.9 }
+    .row{ display:flex; align-items:center; gap:8px; margin:8px 6px }
+    .row label{ min-width:90px; font-size:14px; opacity:.9 }
+    .hint{ margin:6px; font-size:12px; opacity:.7 }
+    #badge{ font-size:12px; padding:2px 8px; border-radius:999px; background:#333; color:#fff }
+
+    #log{ position:fixed; left:50%; bottom:16px; transform:translateX(-50%); background:#111; color:#fff; padding:6px 10px; border-radius:10px; font-size:12px; box-shadow:0 8px 28px rgba(0,0,0,.35); max-width:92vw; text-align:center; display:none }
   </style>
 </head>
 <body>
@@ -59,39 +74,78 @@
 
   <div id="log" role="status"></div>
 
-  <!-- ローカルESM版：パスは配置に一致 -->
+  <!-- ローカルESM版（CDN不使用） -->
   <script type="module">
     import * as vision from './vendor/mediapipe/vision_bundle.mjs';
     const { FilesetResolver, PoseLandmarker } = vision;
     const WASM_BASE = './vendor/mediapipe/wasm';
 
     let stream=null, facing='user';
-    let landmarker=null, landmarkerReady=false, shoulderOK=true, lastVideoTime=-1;
+    let landmarker=null, landmarkerReady=false, shoulderOK=false;
+    let lastVideoTime=-1;
+
+    // 追従用スムージング
+    let smoothX=null, smoothY=null;
+    const ALPHA=0.35; // 0.0～1.0（新しい値の寄与）
 
     const els = {
-      video:document.getElementById('video'), garment:document.getElementById('garment'),
-      startScreen:document.getElementById('startScreen'), startBtn:document.getElementById('startBtn'),
-      toggle:document.getElementById('toggle'), panel:document.getElementById('panel'),
-      modeBtn:document.getElementById('modeBtn'), mirrorChk:document.getElementById('mirrorChk'),
-      deviceSel:document.getElementById('deviceSel'), showGarment:document.getElementById('showGarment'),
-      posX:document.getElementById('posX'), posY:document.getElementById('posY'), scale:document.getElementById('scale'),
-      stopBtn:document.getElementById('stopBtn'), restartBtn:document.getElementById('restartBtn'),
-      badge:document.getElementById('badge'), log:document.getElementById('log'),
+      stage:document.getElementById('stage'),
+      video:document.getElementById('video'),
+      garment:document.getElementById('garment'),
+      startScreen:document.getElementById('startScreen'),
+      startBtn:document.getElementById('startBtn'),
+      toggle:document.getElementById('toggle'),
+      panel:document.getElementById('panel'),
+      modeBtn:document.getElementById('modeBtn'),
+      mirrorChk:document.getElementById('mirrorChk'),
+      deviceSel:document.getElementById('deviceSel'),
+      showGarment:document.getElementById('showGarment'),
+      posX:document.getElementById('posX'),
+      posY:document.getElementById('posY'),
+      scale:document.getElementById('scale'),
+      stopBtn:document.getElementById('stopBtn'),
+      restartBtn:document.getElementById('restartBtn'),
+      badge:document.getElementById('badge'),
+      log:document.getElementById('log'),
     };
 
     const toast=(m,ms=2200)=>{ els.log.textContent=m; els.log.style.display='block';
       clearTimeout(els.log._t); els.log._t=setTimeout(()=>els.log.style.display='none',ms); };
+
     const stopStream=()=>{ if(stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; } };
 
+    function vminPX(){ return Math.min(window.innerWidth, window.innerHeight)/100; }
+
     function updateGarmentTransform(){
-      const dx=+els.posX.value, dy=+els.posY.value, s=+els.scale.value/100, mirror=els.mirrorChk.checked?-1:1;
-      els.garment.style.transform=`translate(-50%,-50%) scaleX(${mirror}) translate(${dx}vmin, ${dy}vmin) scale(${s})`;
+      // スライダーによる微調整：vmin基準 → pxに変換
+      const dx = +els.posX.value * vminPX();
+      const dy = +els.posY.value * vminPX();
+      const s  = +els.scale.value / 100;
+
+      // ミラー表示のときは服も反転
+      const mirror = els.mirrorChk.checked ? -1 : 1;
+
+      els.garment.style.transform =
+        `translate(-50%,-50%) scaleX(${mirror}) translate(${dx}px, ${dy}px) scale(${s})`;
     }
-    function applyMirror(){ els.video.classList.toggle('mirror', els.mirrorChk.checked); updateGarmentTransform(); }
-    function setModeLabel(){ const isUser=facing==='user';
+
+    function applyMirror(){
+      els.video.classList.toggle('mirror', els.mirrorChk.checked);
+      updateGarmentTransform();
+    }
+
+    function setModeLabel(){
+      const isUser=facing==='user';
       els.modeBtn.textContent=isUser?'イン（ミラーON）に起動中':'アウト（反転OFF）に起動中';
-      els.mirrorChk.checked=isUser; applyMirror(); }
-    function refreshGarmentDisplay(){ els.garment.style.display=(els.showGarment.checked && shoulderOK)?'block':'none'; }
+      els.mirrorChk.checked=isUser; // インでミラーON、アウトでOFF
+      applyMirror();
+    }
+
+    function refreshGarmentDisplay(){
+      const on = els.showGarment.checked && shoulderOK;
+      els.garment.classList.toggle('on', on); // フェード付き表示
+    }
+
     const setBadge=(ok,text,color)=>{ els.badge.textContent=text; els.badge.style.background=color; };
 
     async function startCamera({deviceId}={}){
@@ -109,6 +163,9 @@
         if(deviceId && cams.some(c=>c.deviceId===deviceId)) els.deviceSel.value=deviceId;
         else if(cams.some(c=>c.deviceId===prev)) els.deviceSel.value=prev;
 
+        // 位置平滑化の初期化
+        smoothX = smoothY = null;
+
         setModeLabel(); toast('カメラを開始しました');
       }catch(e){ console.error(e); toast('カメラを開始できませんでした。別のブラウザ/端末も試してください。'); }
     }
@@ -125,27 +182,60 @@
         requestAnimationFrame(tick);
       }catch(e){
         console.warn('Pose 初期化に失敗:', e);
-        landmarkerReady=false; shoulderOK=true; setBadge(false,'未対応（手動表示）','#777');
+        landmarkerReady=false; shoulderOK=false; setBadge(false,'未対応（手動表示）','#777');
       }
     }
 
+    // 追従のメインループ
     function tick(){
       if(!landmarkerReady || !els.video.srcObject){ requestAnimationFrame(tick); return; }
       const vtime=Math.round(els.video.currentTime*1000); if(vtime===lastVideoTime){ requestAnimationFrame(tick); return; }
       lastVideoTime=vtime;
 
-      const result=landmarker.detectForVideo(els.video, performance.now());
-      let ok=false;
-      if(result?.landmarks?.length){
-        const lm=result.landmarks[0], L=lm[11], R=lm[12];
-        if(L&&R){ const vis=((L.visibility??1)>0.5)&&((R.visibility??1)>0.5);
-          const inFrame=L.y>0 && L.y<1 && R.y>0 && R.y<1; ok=vis&&inFrame; }
+      const res=landmarker.detectForVideo(els.video, performance.now());
+      let ok=false, cxN=0.5, cyN=0.5; // 正規化(0..1)の肩中心
+
+      if(res?.landmarks?.length){
+        const lm=res.landmarks[0], L=lm[11], R=lm[12];
+        if(L && R){
+          // Mediapipeは0..1の正規化座標。ミラー表示ならXを反転
+          cxN = (L.x + R.x)/2;
+          if(els.mirrorChk.checked) cxN = 1 - cxN;
+          cyN = (L.y + R.y)/2;
+
+          const vis=((L.visibility??1)>0.5)&&((R.visibility??1)>0.5);
+          const inFrame= L.y>0 && L.y<1 && R.y>0 && R.y<1;
+          ok = vis && inFrame;
+        }
       }
-      shoulderOK=ok; setBadge(ok, ok?'検出中':'未検出', ok?'#2ea043':'#555');
+      shoulderOK = ok;
+      setBadge(ok, ok?'検出中':'未検出', ok?'#2ea043':'#555');
+
+      // 正規化座標 → 画面pxへ（videoの描画領域を基準）
+      const stageRect = els.stage.getBoundingClientRect();
+      const videoRect = els.video.getBoundingClientRect();
+      const baseX = videoRect.left - stageRect.left;
+      const baseY = videoRect.top  - stageRect.top;
+      const cxPX = baseX + cxN * videoRect.width;
+      const cyPX = baseY + cyN * videoRect.height;
+
+      // 低域通過フィルタ（なめらかに追従）
+      if(smoothX==null){ smoothX=cxPX; smoothY=cyPX; }
+      else{
+        smoothX = ALPHA*cxPX + (1-ALPHA)*smoothX;
+        smoothY = ALPHA*cyPX + (1-ALPHA)*smoothY;
+      }
+
+      // 服の中心を肩中心に合わせる
+      els.garment.style.left = `${smoothX}px`;
+      els.garment.style.top  = `${smoothY}px`;
+
+      // 表示/非表示とスライダー反映
       refreshGarmentDisplay();
       requestAnimationFrame(tick);
     }
 
+    // UIイベント
     els.startBtn.addEventListener('click', async ()=>{
       els.startBtn.disabled=true; await startCamera(); els.startScreen.style.display='none';
       if(!landmarkerReady) initPose();
@@ -160,8 +250,12 @@
     els.showGarment.addEventListener('change', refreshGarmentDisplay);
     [els.posX, els.posY, els.scale].forEach(el=> el.addEventListener('input', updateGarmentTransform));
 
+    // 初期適用
     updateGarmentTransform(); refreshGarmentDisplay();
     (async()=>{ try{ const r=await fetch('garments.json',{cache:'no-store'}); if(!r.ok) throw 0; console.log('garments.json', await r.json()); }catch(e){} })();
+
+    // 画面サイズ変化時にオフセット計算がズレないよう再適用
+    window.addEventListener('resize', ()=>{ updateGarmentTransform(); });
   </script>
 </body>
 </html>
