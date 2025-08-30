@@ -1,29 +1,15 @@
 {
-  "trainer3": {
-    "name": "長袖トレーナー（3パーツ）",
-    "type": "3parts",
+  "trainer": {
+    "name": "長袖トレーナー（単一画像）",
+    "type": "single",
+
+    "image": "public/garments/trainer.png",
 
     "chest_cm": 58,
     "shoulder_cm": 50,
-    "length_cm": 67,
-
     "px_chest_hint": 980,
-    "anchor": "shoulder_center",
-    "anchorY": 0.33,
 
-    "parts": {
-      "body": {
-        "src": "public/garments/trainer3/body.png",
-        "anchor": [0.50, 0.33]
-      },
-      "sleeve_l": {
-        "src": "public/garments/trainer3/sleeve_l.png",
-        "anchor": [0.98, 0.32]
-      },
-      "sleeve_r": {
-        "src": "public/garments/trainer3/sleeve_r.png",
-        "anchor": [0.02, 0.32]
-      }
-    }
+    "anchor": "shoulder_center",
+    "anchorY": 0.33
   }
 }
