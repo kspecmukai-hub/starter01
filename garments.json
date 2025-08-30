@@ -5,16 +5,13 @@
     "px_chest_hint": 980,
     "shoulder_cm": 50,
     "chest_cm": 58,
-
     "parts": {
-      "bodyURL":   "public/garments/trainer3/body.png",
+      "bodyURL": "public/garments/trainer3/body.png",
 
-      /* ←ここで左右を入れ替え */
-      "armLeftURL":  "public/garments/trainer3/sleeve_r.png",
-      "armRightURL": "public/garments/trainer3/sleeve_l.png",
+      "armLeftURL": "public/garments/trainer3/sleeve_l.png",
+      "armRightURL": "public/garments/trainer3/sleeve_r.png",
 
-      /* ピボット（肩の付け根）。今の画像比率ならこのままでOK、あとで微調整可能 */
-      "armLeftPivot":  [0.86, 0.29],
+      "armLeftPivot": [0.86, 0.29],
       "armRightPivot": [0.14, 0.29]
     }
   }
