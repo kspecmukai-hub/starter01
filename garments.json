@@ -1,29 +1,21 @@
 {
-  "trainer3": {
+  "trainer": {
     "name": "長袖トレーナー（3パーツ）",
-    "type": "3parts",
-
-    "chest_cm": 58,
-    "shoulder_cm": 50,
-    "length_cm": 67,
-
-    "px_chest_hint": 980,
     "anchor": "shoulder_center",
-    "anchorY": 0.33,
+    "px_chest_hint": 980,
+    "shoulder_cm": 50,
+    "chest_cm": 58,
 
     "parts": {
-      "body": {
-        "src": "public/garments/trainer3/body.png",
-        "anchor": [0.50, 0.33]
-      },
-      "sleeve_l": {
-        "src": "public/garments/trainer3/sleeve_r.png",
-        "anchor": [0.04, 0.33]
-      },
-      "sleeve_r": {
-        "src": "public/garments/trainer3/sleeve_l.png",
-        "anchor": [0.96, 0.33]
-      }
+      "bodyURL":   "public/garments/trainer3/body.png",
+
+      /* ←ここで左右を入れ替え */
+      "armLeftURL":  "public/garments/trainer3/sleeve_r.png",
+      "armRightURL": "public/garments/trainer3/sleeve_l.png",
+
+      /* ピボット（肩の付け根）。今の画像比率ならこのままでOK、あとで微調整可能 */
+      "armLeftPivot":  [0.86, 0.29],
+      "armRightPivot": [0.14, 0.29]
     }
   }
 }
