@@ -18,11 +18,11 @@
       },
       "sleeve_l": {
         "src": "public/garments/trainer3/sleeve_l.png",
-        "anchor": [0.98, 0.32]   // ← 肩が画像の右端なら 0.95〜0.99 あたり
+        "anchor": [0.98, 0.32]
       },
       "sleeve_r": {
         "src": "public/garments/trainer3/sleeve_r.png",
-        "anchor": [0.02, 0.32]   // ← 肩が画像の左端なら 0.01〜0.05 あたり
+        "anchor": [0.02, 0.32]
       }
     }
   }
