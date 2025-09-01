@@ -23,17 +23,17 @@
     #pcOnly p{ margin:8px 0; opacity:.95; line-height:1.6; }
     #pcOnly .mono{ font:12px ui-monospace,monospace; opacity:.8; }
 
-    /* スタートカード：ど真ん中固定 */
+    /* スタートカード：カード中央固定、文字は左、ボタンだけ中央 */
     #startScreen{ position:fixed; inset:0; background:rgba(0,0,0,.45); }
     #startCard{
       background:transparent; color:#fff; padding:24px 28px;
       border-radius:16px; border:1px solid rgba(255,255,255,.25);
       position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
-      text-align:center; max-width:min(92vw,520px);
+      text-align:left; max-width:min(92vw,520px);
     }
     #startCard h1{ margin:0 0 10px; font-size:22px; }
     #startCard p{ margin:10px 0 14px; line-height:1.7; opacity:.95; }
-    #startCard .btn{ display:inline-block; margin:12px auto 0; }
+    #startCard .btn{ display:inline-block; margin:12px auto 0; } /* 中央配置 */
 
     .btn{ appearance:none; border:0; border-radius:10px; padding:12px 16px; font-weight:700; cursor:pointer; }
     .btn.primary{ background:var(--ui-accent); color:#053; }
