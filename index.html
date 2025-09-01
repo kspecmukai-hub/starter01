@@ -38,7 +38,7 @@
     #panel h2{ font-size:14px; margin:4px 0 8px; opacity:.95; }
     .row{ display:grid; grid-template-columns: 1fr 1fr; gap:8px; align-items:center; margin:8px 0; }
     .row > label{ fontサイズ:12px; opacity:.95; text-shadow:0 1px 2px rgba(0,0,0,.4); }
-    input[type="range"], input[type="checkbox"]{ width:100%; }
+    input[type="range"], input[type="checkbox"], input[type="number"]{ width:100%; }
     .mono{ font:12px ui-monospace,monospace; opacity:.95; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     #toggle{
       position:absolute; right:20px; bottom:20px; width:48px; height:48px; border-radius:50%;
@@ -75,11 +75,12 @@
 
     <div id="panel" role="dialog" aria-modal="false" aria-label="設定">
       <h2>設定</h2>
-      <div class="row"><label>カメラ</label><button id="modeBtn" type="button" class="btn ghost" style="padding:8px 10px">イン（ミラーON）に起動中</button></div>
+      <div class="row"><label>カメラ</label><button id="modeBtn" type="button" class="btn ghost" style="padding:8px 10px">インカメラ起動中</button></div>
       <div class="row"><label>ミラー</label><input id="mirrorChk" type="checkbox" checked /></div>
       <div class="row"><label>横位置（微調整）</label><input id="offX" type="range" min="-80" max="80" value="10" /></div>
-      <div class="row"><label>縦位置（微調整）</label><input id="offY" type="range" min="-120" max="120" value="10" /></div>
-      <div class="row"><label>プリセット</label><div id="presetInfo" class="mono">loading…</div></div>
+      <div class="row"><label>縦位置（微調整）</label><input id="offY" type="range" min="-120" max="120" value="8" /></div>
+      <!-- プリセット表示は削除（内部適用は継続） -->
+      <div class="row"><label>肩幅（cm・任意）</label><input id="userShoulder" type="number" min="30" max="60" step="0.5" placeholder="例: 43.0" inputmode="decimal" /></div>
       <div class="row"><button id="stopBtn" class="btn ghost">停止</button><button id="restartBtn" class="btn ghost">再起動</button></div>
     </div>
 
@@ -104,19 +105,20 @@
       mirrorChk: document.getElementById('mirrorChk'),
       offX: document.getElementById('offX'),
       offY: document.getElementById('offY'),
-      presetInfo: document.getElementById('presetInfo'),
+      // presetInfo 行は削除済み
+      userShoulder: document.getElementById('userShoulder'),
       stopBtn: document.getElementById('stopBtn'),
       restartBtn: document.getElementById('restartBtn'),
     };
 
     // ==== 現行ベース（基礎値据え置き） ====
-    const ALPHA_POS=0.16, ALPHA_SCALE=0.12, ALPHA_BRIGHT=0.35, HOLD_MS=900; // ← HOLD延長
-    let ANCHOR_Y_FRAC=0.33, DROP_K=0.147;   // ロールバック値
+    const ALPHA_POS=0.16, ALPHA_SCALE=0.12, ALPHA_BRIGHT=0.35, HOLD_MS=900;
+    let ANCHOR_Y_FRAC=0.33, DROP_K=0.145;   // ロールバック値
     const FIT_GAIN=1.0;
 
-    // 距離しきい値を緩和 + 無効デバウンス
-    const SHOULDER_MIN_FRAC=0.04;   // ← 0.06 から緩和（遠くても消えにくい）
-    const SHOULDER_MAX_FRAC=0.72;   // ← 0.55 から緩和（近くても消えにくい）
+    // 距離しきい値（緩和） + 無効デバウンス
+    const SHOULDER_MIN_FRAC=0.04;
+    const SHOULDER_MAX_FRAC=0.72;
     const STABLE_ARM=3;             // 連続3フレームで表示アーム完了
     const INVALID_GRACE=8;          // 連続8フレーム無効になったら非表示
 
@@ -186,7 +188,7 @@
       }catch(e){ console.warn('garments.json 読込失敗:', e); }
     }
 
-    // BOM除去＋厳密JSONパース＋UAマッチ
+    // BOM除去＋厳密JSONパース＋UAマッチ（UIへの表示はしない）
     async function loadPresets(){
       try{
         const r=await fetch('presets.json',{cache:'no-store'});
@@ -199,12 +201,11 @@
         const ua=navigator.userAgent||'';
         let anchor=cfg?.defaults?.anchorY ?? ANCHOR_Y_FRAC;
         let dropK =cfg?.defaults?.dropK  ?? DROP_K;
-        let matched=false;
 
         if(Array.isArray(cfg?.models)){
           for(const m of cfg.models){
             const re=new RegExp(m.match,'i');
-            if(re.test(ua)){ matched=true;
+            if(re.test(ua)){
               if(typeof m.anchorY==='number') anchor=m.anchorY;
               if(typeof m.dropK==='number')   dropK =m.dropK;
               break;
@@ -212,11 +213,8 @@
           }
         }
         ANCHOR_Y_FRAC=anchor; DROP_K=dropK;
-        els.presetInfo.textContent = matched
-          ? `applied: anchorY=${ANCHOR_Y_FRAC.toFixed(2)} / dropK=${DROP_K.toFixed(3)}`
-          : `defaults: anchorY=${ANCHOR_Y_FRAC.toFixed(2)} / dropK=${DROP_K.toFixed(3)}`;
+        // UI表示は削除したため何もしない
       }catch(e){
-        els.presetInfo.textContent='load error: '+e.message;
         console.warn('presets.json 読込失敗:', e);
       }
     }
@@ -226,10 +224,20 @@
       let s=1;
       if(updateGarmentTransform._shoulderPX){
         const pxHint=garmentConf.px_chest_hint||980;
-        let chestPx=updateGarmentTransform._shoulderPX;
-        if(garmentConf.chest_cm && garmentConf.shoulder_cm){
-          chestPx*= (garmentConf.chest_cm/garmentConf.shoulder_cm);
+
+        // === スケール基準の胸幅px推定 ===
+        let chestPx = updateGarmentTransform._shoulderPX;
+        const userCm = updateGarmentTransform._userShoulderCm || 0;
+
+        if(userCm>0 && garmentConf.chest_cm){
+          // ユーザー実測：px/㎝ = shoulderPX / userShoulder(cm)
+          chestPx = (updateGarmentTransform._shoulderPX / userCm) * garmentConf.chest_cm;
+        }else if(garmentConf.chest_cm && garmentConf.shoulder_cm){
+          // 既存の比率推定
+          chestPx *= (garmentConf.chest_cm/garmentConf.shoulder_cm);
         }
+        // ==============================
+
         const autoS=(pxHint>0)?(chestPx/pxHint):1;
         s=lerp(1,autoS,FIT_GAIN);
       }
@@ -332,15 +340,28 @@
       els.garment.classList.toggle('mirror', mirror);
     }
 
+    // ====== UIイベント ======
     els.toggle.addEventListener('click', ()=> els.panel.classList.toggle('open'));
     els.modeBtn.addEventListener('click', async ()=>{
       facing=(facing==='user')?'environment':'user';
       mirror=(facing==='user'); applyMirror();
-      els.modeBtn.textContent=(facing==='user')?'イン（ミラーON）に起動中':'アウト（ミラーOFF）に起動中';
+      els.modeBtn.textContent=(facing==='user')?'インカメラ起動中':'アウトカメラ起動中';
       await restartCamera();
     });
     els.mirrorChk.addEventListener('change', ()=>{ mirror=!!els.mirrorChk.checked; applyMirror(); });
     ['offX','offY'].forEach(id=> els[id].addEventListener('input', updateGarmentTransform));
+    if(els.userShoulder){
+      // 保存値の復元
+      const saved=localStorage.getItem('userShoulderCm');
+      if(saved){ els.userShoulder.value=saved; updateGarmentTransform._userShoulderCm=parseFloat(saved)||0; }
+      els.userShoulder.addEventListener('change', ()=>{
+        const v=parseFloat(els.userShoulder.value);
+        const cm=Number.isFinite(v)&&v>0?v:0;
+        updateGarmentTransform._userShoulderCm=cm;
+        if(cm>0) localStorage.setItem('userShoulderCm', String(cm));
+        else localStorage.removeItem('userShoulderCm');
+      });
+    }
     els.startBtn.addEventListener('click', startCamera);
     els.stopBtn.addEventListener('click', stopCamera);
     els.restartBtn.addEventListener('click', restartCamera);
@@ -348,8 +369,8 @@
 
     (async ()=>{
       els.mirrorChk.checked=mirror;
-      els.modeBtn.textContent='イン（ミラーON）に起動中';
-      await loadPresets();       // ← プリセット先に
+      els.modeBtn.textContent='インカメラ起動中';   // ← 文言を簡潔化
+      await loadPresets();       // ← 内部適用のみ（UI表示なし）
       await loadGarmentConfig(); // ← 服寸法ヒント
     })();
   </script>
