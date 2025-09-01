@@ -1,15 +1,10 @@
 {
   "trainer": {
     "name": "長袖トレーナー（単一画像）",
-    "type": "single",
-
     "image": "public/garments/trainer.png",
-
     "chest_cm": 58,
     "shoulder_cm": 50,
     "px_chest_hint": 980,
-
-    "anchor": "shoulder_center",
     "anchorY": 0.33
   }
 }
