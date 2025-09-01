@@ -18,28 +18,22 @@
       will-change:left, top, width, opacity, filter;
     }
 
-    /* PC専用オーバーレイ */
+    /* PC専用オーバーレイ（QR表示付き） */
     #pcOnly{ position:absolute; inset:0; display:none; place-items:center; color:#fff; padding:24px; text-align:center; }
     #pcOnly .card{ background:transparent; padding:22px 24px; border-radius:16px; border:1px solid rgba(255,255,255,.25) }
     #pcOnly h1{ margin:0 0 10px; font-size:20px; }
     #pcOnly p{ margin:8px 0; opacity:.95; line-height:1.6; }
-    #pcOnly .qrWrap{ margin-top:12px; display:grid; place-items:center; gap:8px; }
-    #pcOnly .qrWrap img{ width:220px; height:220px; image-rendering:pixelated; background:#fff; padding:8px; border-radius:12px; }
-    #pcOnly .hint{ font-size:12px; opacity:.85; }
+    #pcOnly .qr{ width:240px; max-width:60vw; margin:14px auto 6px; display:block; background:#fff; padding:10px; border-radius:10px; }
 
-    /* スタート画面 */
     #startScreen{ position:absolute; inset:0; display:grid; place-items:center; background:rgba(0,0,0,.45); }
     #startCard{ background:transparent; color:#fff; padding:24px 28px; border-radius:16px; border:1px solid rgba(255,255,255,.25) }
     #startCard h1{ margin:0 0 10px; font-size:22px; }
     #startCard p{ margin:10px 0 14px; line-height:1.7; opacity:.95; }
-    /* ボタン中央寄せ（仕様：文言は左寄せ、ボタンは中央） */
-    #startCard button#startBtn{ display:block; margin:12px auto 0; }
 
     .btn{ appearance:none; border:0; border-radius:10px; padding:12px 16px; font-weight:700; cursor:pointer; }
     .btn.primary{ background:var(--ui-accent); color:#053; }
     .btn.ghost{ background:rgba(255,255,255,.12); color:#fff; }
 
-    /* 設定パネル */
     #panel{
       position:absolute; right:18px; bottom:86px; width:320px; max-width:92vw;
       background:transparent; color:#fff; border-radius:16px; padding:8px 10px; display:none;
@@ -48,12 +42,10 @@
     #panel.open{ display:block; }
     #panel h2{ font-size:14px; margin:4px 0 8px; opacity:.95; }
     .row{ display:grid; grid-template-columns: 1fr 1fr; gap:8px; align-items:center; margin:8px 0; }
-    /* タイポ修正：fontサイズ→font-size */
     .row > label{ font-size:12px; opacity:.95; text-shadow:0 1px 2px rgba(0,0,0,.4); }
     input[type="range"], input[type="checkbox"]{ width:100%; }
     .mono{ font:12px ui-monospace,monospace; opacity:.95; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 
-    /* ⚙トグル */
     #toggle{
       position:absolute; right:20px; bottom:20px; width:48px; height:48px; border-radius:50%;
       display:grid; place-items:center; background:#10b981; color:#002; font-weight:800; cursor:pointer;
@@ -70,19 +62,16 @@
     <video id="video" autoplay playsinline muted></video>
     <img id="garment" alt="garment" src="public/garments/trainer.png" />
 
-    <!-- PC専用案内（文言更新・UA非表示・QR表示） -->
+    <!-- PCアクセス時専用オーバーレイ（文言変更＋QR） -->
     <div id="pcOnly">
       <div class="card">
         <h1>スマホ専用です 📱</h1>
         <p>このバーチャル試着ソフトはスマートフォン（iOS/Android）のブラウザでご利用ください。</p>
-        <div class="qrWrap">
-          <img id="qrImg" alt="QRコード（スマホで開く）" />
-          <p class="hint">スマホのカメラでQRを読み取って開いてください。</p>
-        </div>
+        <img class="qr" src="public/qr.png" alt="QR to open on phone">
+        <p style="opacity:.8;font-size:12px">スマホのカメラでQRを読み取って開いてください。</p>
       </div>
     </div>
 
-    <!-- スタートカード（モバイル用） -->
     <div id="startScreen">
       <div id="startCard">
         <h1>カメラの準備をします</h1>
@@ -92,7 +81,6 @@
       </div>
     </div>
 
-    <!-- 設定パネル -->
     <div id="panel" role="dialog" aria-modal="false" aria-label="設定">
       <h2>設定</h2>
       <div class="row">
@@ -101,9 +89,7 @@
       </div>
       <div class="row"><label>ミラー</label><input id="mirrorChk" type="checkbox" checked /></div>
       <div class="row"><label>横位置（微調整）</label><input id="offX" type="range" min="-80" max="80" value="10" /></div>
-      <!-- ロールバック基準点：offY 既定=8。少し下げたい場合は 10 に変更可 -->
-      <div class="row"><label>縦位置（微調整）</label><input id="offY" type="range" min="-120" max="120" value="8" /></div>
-      <!-- プリセット行は削除 -->
+      <div class="row"><label>縦位置（微調整）</label><input id="offY" type="range" min="-120" max="120" value="10" /></div>
       <div class="row"><button id="stopBtn" class="btn ghost">停止</button><button id="restartBtn" class="btn ghost">再起動</button></div>
     </div>
 
@@ -129,17 +115,18 @@
       offY: document.getElementById('offY'),
       stopBtn: document.getElementById('stopBtn'),
       restartBtn: document.getElementById('restartBtn'),
-      qrImg: document.getElementById('qrImg')
     };
 
-    // ==== 現行ベース（基礎値据え置き） ====
-    const ALPHA_POS=0.16, ALPHA_SCALE=0.12, ALPHA_BRIGHT=0.35, HOLD_MS=900;
+    // ==== 現行ベース（安全運転：基礎値据え置き） ====
+    // 追従をやや速め（ALPHA_SCALE 0.16）
+    const ALPHA_POS=0.16, ALPHA_SCALE=0.16, ALPHA_BRIGHT=0.35, HOLD_MS=900;
     let ANCHOR_Y_FRAC=0.33, DROP_K=0.147;
     const FIT_GAIN=1.0;
 
-    // 距離しきい値を緩和 + 無効デバウンス
+    // 距離しきい値：近距離を広げ、極近距離は即非表示
     const SHOULDER_MIN_FRAC=0.04;
-    const SHOULDER_MAX_FRAC=0.72;
+    const SHOULDER_MAX_FRAC=0.80;   // 0.72→0.80（近距離でも有効を維持）
+    const TOO_CLOSE_FRAC=0.90;      // 極近距離は貼り付き防止で即非表示
     const STABLE_ARM=3;
     const INVALID_GRACE=8;
 
@@ -155,21 +142,9 @@
 
     const isMobile=/Android|iPhone|iPad|iPod/i.test(navigator.userAgent||'');
     if(!isMobile){
-      // PC用表示：案内とQRのみ見せる
       els.pcOnly.style.display='grid';
-      els.startScreen.style.display='none';
-      // PCでは設定ボタンを非表示
+      // PCでは設定ボタンを非表示（仕様）
       els.toggle.style.display='none';
-      els.panel.classList.remove('open');
-      els.toggle.setAttribute('aria-hidden','true');
-
-      // QRコード画像を生成（Google Chart → 失敗時は qrserver にフォールバック）
-      const url = location.href.split('#')[0];
-      const enc = encodeURIComponent(url);
-      const primary = `https://chart.googleapis.com/chart?chs=220x220&cht=qr&chl=${enc}&chld=H|0`;
-      const fallback = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${enc}`;
-      els.qrImg.onerror = ()=>{ els.qrImg.onerror=null; els.qrImg.src=fallback; };
-      els.qrImg.src = primary;
     }
 
     els.garment.addEventListener('load', ()=>{
@@ -222,14 +197,10 @@
         const data=await r.json();
         const firstKey=Object.keys(data)[0];
         garmentConf=data[firstKey]||null;
-        // garments.json の anchorY を反映（あれば上書き）
-        if(garmentConf && typeof garmentConf.anchorY==='number'){
-          ANCHOR_Y_FRAC = garmentConf.anchorY;
-        }
       }catch(e){ console.warn('garments.json 読込失敗:', e); }
     }
 
-    // BOM除去＋厳密JSONパース（UI表示なし・内部適用は任意）
+    // presets.json 読み込み（UI表示なし・内部適用のみ）
     async function loadPresets(){
       try{
         const r=await fetch('presets.json',{cache:'no-store'});
@@ -237,7 +208,7 @@
         let txt=await r.text();
         txt=txt.replace(/^\uFEFF/,'').trim();
         if(!txt.startsWith('{')) throw new Error('not JSON (starts with "'+txt.slice(0,20).replace(/\s/g,' ')+'…")');
-        JSON.parse(txt); // ※必要ならここで UA マッチして ANCHOR_Y_FRAC / DROP_K を上書き
+        JSON.parse(txt);
       }catch(e){
         console.warn('presets.json 読込失敗:', e);
       }
@@ -279,6 +250,7 @@
       if(!landmarker||!els.video||!els.video.videoWidth){ requestAnimationFrame(tick); return; }
       const W=els.stage.clientWidth, H=els.stage.clientHeight;
       const now=performance.now(); let ok=false, valid=false;
+      let tooClose=false; // ★極近距離フラグ（フレーム最後でも参照）
 
       try{
         const result=landmarker.detectForVideo(els.video,now);
@@ -291,14 +263,22 @@
             const shoulderPX=Math.abs(R.x-L.x)*W;
             const shoulderFrac=shoulderPX/Math.max(1,W);
 
+            // ★ 常に少しずつ肩幅・位置を更新（貼り付き防止の肝）
+            const pxSmooth = updateGarmentTransform._shoulderPX;
+            const shoulderPXc = Math.min(shoulderPX, W*0.92); // 安全上限
+            updateGarmentTransform._shoulderPX = (pxSmooth==null)
+              ? shoulderPXc
+              : pxSmooth + (shoulderPXc - pxSmooth) * 0.35; // ゆるスムージング
+            autoDropPx = updateGarmentTransform._shoulderPX * DROP_K;
+            updateGarmentTransform._cx=cx; 
+            updateGarmentTransform._cy=cy;
+
+            // 有効判定＋極近距離判定
+            tooClose = (shoulderFrac >= TOO_CLOSE_FRAC);
             valid = (shoulderFrac>SHOULDER_MIN_FRAC && shoulderFrac<SHOULDER_MAX_FRAC);
 
             if(valid){
-              updateGarmentTransform._shoulderPX=shoulderPX;
-              autoDropPx=shoulderPX*DROP_K;
-              updateGarmentTransform._cx=cx; updateGarmentTransform._cy=cy;
-
-              // 明るさ計測
+              // 明るさ計測（従来どおり）
               try{
                 const vw=els.video.videoWidth, vh=els.video.videoHeight;
                 const cxN=(L.x+R.x)/2, cyN=(L.y+R.y)/2;
@@ -320,10 +300,8 @@
                 smB = (smB==null)?target : (smB + (target-smB)*ALPHA_BRIGHT);
                 els.garment.style.filter = `brightness(${smB.toFixed(3)})`;
               }catch(_){}
-            }
 
-            // アーム & デバウンス
-            if(valid){
+              // アーム & デバウンス
               stableCount = Math.min(STABLE_ARM, stableCount+1);
               invalidCount = 0;
               if(stableCount>=STABLE_ARM){ isArmed=true; ok=true; lastDetMS=now; }
@@ -334,9 +312,10 @@
         }
       }catch(e){ console.warn('pose detect error:', e); }
 
-      const hold=(now-lastDetMS)<HOLD_MS;
-      const debouncing = (invalidCount>0 && invalidCount<INVALID_GRACE);
-      const wantShow = isArmed && (ok || hold || debouncing);
+      // ★ 極近距離のときは即非表示（HOLDやデバウンスも無効化）
+      const hold=((now-lastDetMS)<HOLD_MS) && !tooClose;
+      const debouncing=(invalidCount>0 && invalidCount<INVALID_GRACE) && !tooClose;
+      const wantShow = isArmed && !tooClose && (ok || hold || debouncing);
       if(!wantShow && invalidCount>=INVALID_GRACE){ stableCount=0; }
 
       els.garment.style.display = wantShow ? 'block' : 'none';
@@ -356,8 +335,6 @@
     els.modeBtn.addEventListener('click', async ()=>{
       facing=(facing==='user')?'environment':'user';
       mirror=(facing==='user'); applyMirror();
-      // 切替時にUIのチェック状態も同期
-      els.mirrorChk.checked = mirror;
       els.modeBtn.textContent=(facing==='user')?'インカメラ起動中':'アウトカメラ起動中';
       await restartCamera();
     });
@@ -372,7 +349,7 @@
       els.mirrorChk.checked=mirror;
       els.modeBtn.textContent='インカメラ起動中';
       await loadPresets();       // 内部適用のみ
-      await loadGarmentConfig(); // 服寸法ヒント（anchorY 反映あり）
+      await loadGarmentConfig(); // 服寸法ヒント
     })();
   </script>
 </body>
