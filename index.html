@@ -225,7 +225,7 @@
       smY=(smY==null)?cy:lerp(smY,cy,ALPHA_POS);
 
       const w=garmentNatW*smS, h=garmentNatH*smS;
-      const desiredY=smY+autoDropPx - ((1-smS) * updateGarmentTransform._shoulderPX * 0.09);
+      const desiredY=smY+autoDropPx - ((1-smS) * updateGarmentTransform._shoulderPX * 0.08);
       const anchorOffset=(0.5-ANCHOR_Y_FRAC)*h;
 
       const offX=parseInt(els.offX.value,10)||0;
