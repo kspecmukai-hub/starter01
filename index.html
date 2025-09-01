@@ -2,295 +2,513 @@
 <html lang="ja">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta
+    name="viewport"
+    content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no"
+  />
   <title>starter01 | Camera Base</title>
   <style>
-    :root{ --ui-fg:#fff; --ui-accent:#4ade80; }
+    :root{
+      --ui-fg:#fff;
+      --ui-bg:#000;
+      --ui-accent:#22c55e;
+      --ui-accent-2:#10b981;
+      --ui-muted:rgba(255,255,255,.65);
+      --ui-card:#111;
+      --ui-shadow:0 10px 30px rgba(0,0,0,.25);
+    }
     *{ box-sizing:border-box }
     html,body{ height:100%; margin:0 }
-    body{ background:#000; color:var(--ui-fg); font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif }
-    #stage{ position:relative; width:100vw; height:100vh; overflow:hidden; background:#000 }
-    #video{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
-    .mirror{ transform: scaleX(-1); }
+    body{
+      background:var(--ui-bg);
+      color:var(--ui-fg);
+      font-family: system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,"Noto Sans JP",sans-serif;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+    }
+
+    /* ===== Stage ===== */
+    #stage{
+      position:relative;
+      width:100vw; height:100vh;
+      overflow:hidden;
+      background:#000;
+      user-select:none;
+    }
+    #video{
+      position:absolute; inset:0;
+      width:100%; height:100%;
+      object-fit:cover;
+      background:#000;
+      transform-origin:center center;
+      will-change:transform;
+    }
     #garment{
-      position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
-      display:none; pointer-events:none; opacity:0; transition:opacity .22s ease;
-      will-change:left, top, width, opacity;
+      position:absolute; left:0; top:0;
+      will-change:transform,left,top,width,opacity;
+      pointer-events:none;
+      image-rendering:auto;
+      filter: none;
+      transform-origin: 0 0; /* top-left */
     }
-    #pcOnly{ position:absolute; inset:0; display:none; place-items:center; color:#fff; padding:24px; text-align:center; }
-    #pcOnly .card{ background:transparent; padding:22px 24px; border-radius:16px; border:1px solid rgba(255,255,255,.25) }
-    #pcOnly h1{ margin:0 0 10px; font-size:20px; }
-    #pcOnly p{ margin:8px 0; opacity:.95; line-height:1.6; }
-    #pcOnly .mono{ font:12px ui-monospace,monospace; opacity:.8; }
-    #startScreen{ position:absolute; inset:0; display:grid; place-items:center; background:rgba(0,0,0,.45); }
-    #startCard{ background:transparent; color:#fff; padding:24px 28px; border-radius:16px; border:1px solid rgba(255,255,255,.25) }
-    #startCard h1{ margin:0 0 10px; font-size:22px; }
-    #startCard p{ margin:10px 0 14px; line-height:1.7; opacity:.95; }
-    .btn{ appearance:none; border:0; border-radius:10px; padding:12px 16px; font-weight:700; cursor:pointer; }
-    .btn.primary{ background:var(--ui-accent); color:#053; }
-    .btn.ghost{ background:rgba(255,255,255,.12); color:#fff; }
+    .mirror{ transform: scaleX(-1); }
+
+    /* ===== Floating Settings Button ===== */
+    #fab{
+      position: absolute;
+      right: 16px; bottom: 24px;
+      width: 56px; height: 56px;
+      border-radius: 50%;
+      background: var(--ui-accent);
+      color:#002b10;
+      display:grid; place-items:center;
+      box-shadow: var(--ui-shadow);
+      cursor:pointer;
+      z-index:50;
+      transition: transform .1s ease;
+    }
+    #fab:active{ transform: scale(.98) }
+    #fab svg{ width:26px; height:26px }
+
+    /* ===== Settings Card ===== */
     #panel{
-      position:absolute; right:18px; bottom:86px; width:320px; max-width:92vw;
-      background:transparent; color:#fff; border-radius:16px; padding:8px 10px; display:none;
-      border:1px solid rgba(255,255,255,.25);
+      position:absolute;
+      right: 12px; bottom: 92px;
+      width:min(92vw, 360px);
+      padding: 14px 14px 12px;
+      border-radius: 16px;
+      background:rgba(20,20,20,.94);
+      box-shadow: var(--ui-shadow);
+      backdrop-filter: blur(8px);
+      z-index:60;
+      display:none;
     }
-    #panel.open{ display:block; }
-    #panel h2{ font-size:14px; margin:4px 0 8px; opacity:.95; }
-    .row{ display:grid; grid-template-columns: 1fr 1fr; gap:8px; align-items:center; margin:8px 0; }
-    .row > label{ font-size:12px; opacity:.95; text-shadow:0 1px 2px rgba(0,0,0,.4); }
-    input[type="range"], input[type="checkbox"]{ width:100%; }
-    .mono{ font:12px ui-monospace,monospace; opacity:.95; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-    #toggle{
-      position:absolute; right:20px; bottom:20px; width:48px; height:48px; border-radius:50%;
-      display:grid; place-items:center; background:#10b981; color:#002; font-weight:800; cursor:pointer;
-      box-shadow:0 6px 24px rgba(0,0,0,.35);
+    #panel.show{ display:block }
+    .row{ display:flex; align-items:center; gap:10px; margin:10px 0 }
+    .row label{ font-size:14px; color:var(--ui-muted); min-width:6em }
+    .row input[type="range"]{ flex:1 }
+    .row .val{ width:64px; text-align:right; color:#bfead2; font-variant-numeric: tabular-nums }
+    .row .switch{ display:flex; align-items:center; gap:10px }
+    .btn{
+      appearance:none; border:0; border-radius:10px;
+      background:#222; color:#fff;
+      padding:10px 12px; cursor:pointer;
     }
-    @media (max-width:420px){
-      #panel{ right:12px; bottom:76px; }
-      #startCard{ padding:20px; border-radius:12px; }
+    .btn.primary{ background:var(--ui-accent-2); color:#06251a }
+    .small{ font-size:12px; color:var(--ui-muted) }
+    .caption{ font-size:12px; color:#a7f3d0; line-height:1.4; margin-top:8px }
+
+    /* ===== PC Overlay ===== */
+    #pcOverlay{
+      position:absolute; inset:0;
+      background: rgba(0,0,0,.85);
+      color:#fff;
+      display:none;
+      z-index:100;
+      align-items:center; justify-content:center;
+      text-align:center; padding: 24px;
     }
+    #pcOverlay.show{ display:flex }
+    #pcOverlay .card{
+      background:#111; border:1px solid #333;
+      padding: 18px 16px; border-radius:16px; max-width: 520px;
+      box-shadow: var(--ui-shadow);
+    }
+    #pcOverlay h2{ margin: 0 0 8px; font-weight:700 }
+    #pcOverlay p{ margin: 6px 0; color:#e5e7eb }
+    #pcOverlay code{
+      background:#0b0b0b; border:1px solid #222;
+      padding: 4px 6px; border-radius:6px;
+      font-family: ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+      color:#93c5fd;
+    }
+
+    /* top status (debug mini) */
+    #status{
+      position:absolute; left:10px; top:8px;
+      font-size:12px; color:#bfead2;
+      background:rgba(0,0,0,.4);
+      padding:6px 8px; border-radius:8px;
+      z-index:40; pointer-events:none;
+    }
+
+    a,button,input,select{ font:inherit }
   </style>
 </head>
 <body>
-  <div id="stage" aria-label="camera stage">
-    <video id="video" autoplay playsinline muted></video>
-    <img id="garment" alt="garment" src="public/garments/trainer.png" />
+  <div id="stage">
+    <video id="video" playsinline muted></video>
+    <img id="garment" alt="garment" aria-hidden="true"/>
 
-    <div id="pcOnly">
+    <div id="status" class="small">loading…</div>
+
+    <div id="pcOverlay">
       <div class="card">
-        <h1>スマホ専用です 📱</h1>
-        <p>このデモはスマートフォン（iOS/Android）のブラウザでご利用ください。<br>PCでは動作確認のみ可能です。</p>
-        <p class="mono" id="uaText"></p>
+        <h2>スマホ専用です 📱</h2>
+        <p>この体験はスマートフォンのカメラ前提で最適化されています。</p>
+        <p class="small">UA: <code id="uaTxt"></code></p>
+        <p class="small">スマホで本ページを開いてください。</p>
       </div>
     </div>
 
-    <div id="startScreen">
-      <div id="startCard">
-        <h1>カメラの準備をします</h1>
-        <p>「カメラを開始」を押すと、ブラウザからカメラ許可を聞かれます。<br>インカメで開始し、ミラー表示（左右反転）になります。</p>
-        <button id="startBtn" class="btn primary">カメラを開始</button>
-        <p class="hint">※ 右下の⚙で「アウト/ミラーOFF」へ切替できます。</p>
+    <div id="fab" title="設定">
+      <!-- gear -->
+      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM19.43 12.98a7.996 7.996 0 0 0 .06-1l1.74-1.35a.5.5 0 0 0 .12-.64l-1.65-2.86a.5.5 0 0 0-.6-.22l-2.05.83a7.9 7.9 0 0 0-.86-.5l-.31-2.2a.5.5 0 0 0-.49-.43h-3.3a.5.5 0 0 0-.49.43l-.31 2.2c-.29.14-.58.31-.86.5l-2.05-.83a.5.5 0 0 0-.6.22L3.65 9a.5.5 0 0 0 .12.64L5.5 11a8.3 8.3 0 0 0 0 2L3.77 14.35a.5.5 0 0 0-.12.64l1.65 2.86a.5.5 0 0 0 .6.22l2.05-.83c.28.19.57.36.86.5l.31 2.2a.5.5 0 0 0 .49.43h3.3a.5.5 0 0 0 .49-.43l.31-2.2c.29-.14.58-.31.86-.5l2.05.83a.5.5 0 0 0 .6-.22l1.65-2.86a.5.5 0 0 0-.12-.64L19.43 13z"/>
+      </svg>
+    </div>
+
+    <div id="panel" role="dialog" aria-label="設定">
+      <div class="row">
+        <label>ミラー</label>
+        <div class="switch">
+          <input id="chkMirror" type="checkbox" />
+          <span class="small">ONにすると鏡のように見えます</span>
+        </div>
       </div>
+      <div class="row">
+        <label>横 微調整</label>
+        <input id="rngX" type="range" min="-60" max="60" step="1" value="0" />
+        <div class="val"><span id="valX">0</span>px</div>
+      </div>
+      <div class="row">
+        <label>縦 微調整</label>
+        <input id="rngY" type="range" min="-60" max="60" step="1" value="0" />
+        <div class="val"><span id="valY">0</span>px</div>
+      </div>
+      <div class="row" style="justify-content:flex-end; gap:8px">
+        <button id="btnReset" class="btn">微調整リセット</button>
+        <button id="btnRestart" class="btn primary">停止/再開</button>
+      </div>
+      <div class="caption" id="presetInfo">preset: …</div>
     </div>
-
-    <div id="panel" role="dialog" aria-modal="false" aria-label="設定">
-      <h2>設定</h2>
-      <div class="row"><label>カメラ</label><button id="modeBtn" type="button" class="btn ghost" style="padding:8px 10px">イン（ミラーON）に起動中</button></div>
-      <div class="row"><label>ミラー</label><input id="mirrorChk" type="checkbox" checked /></div>
-      <div class="row"><label>横位置（微調整）</label><input id="offX" type="range" min="-80" max="80" value="0" /></div>
-      <div class="row"><label>縦位置（微調整）</label><input id="offY" type="range" min="-120" max="120" value="0" /></div>
-      <div class="row"><label>プリセット</label><div id="presetInfo" class="mono">loading…</div></div>
-      <div class="row"><button id="stopBtn" class="btn ghost">停止</button><button id="restartBtn" class="btn ghost">再起動</button></div>
-    </div>
-
-    <button id="toggle" title="設定">⚙</button>
   </div>
 
   <script type="module">
-    import * as vision from './vendor/mediapipe/vision_bundle.mjs';
-    const WASM_BASE = './vendor/mediapipe/wasm/';
+    // ===== Imports (local bundle) =====
+    import { FilesetResolver, PoseLandmarker } from "./vendor/mediapipe/vision_bundle.mjs";
 
-    const els = {
-      stage: document.getElementById('stage'),
-      video: document.getElementById('video'),
-      garment: document.getElementById('garment'),
-      pcOnly: document.getElementById('pcOnly'),
-      uaText: document.getElementById('uaText'),
-      startScreen: document.getElementById('startScreen'),
-      startBtn: document.getElementById('startBtn'),
-      toggle: document.getElementById('toggle'),
-      panel: document.getElementById('panel'),
-      modeBtn: document.getElementById('modeBtn'),
-      mirrorChk: document.getElementById('mirrorChk'),
-      offX: document.getElementById('offX'),
-      offY: document.getElementById('offY'),
-      presetInfo: document.getElementById('presetInfo'),
-      stopBtn: document.getElementById('stopBtn'),
-      restartBtn: document.getElementById('restartBtn'),
+    // ====== Constants ======
+    const ALPHA_POS   = 0.16;
+    const ALPHA_SCALE = 0.12;
+    const HOLD_MS     = 600;
+    const FIT_GAIN    = 1.0;
+
+    // fallback (will be overwritten by presets.json)
+    const DEFAULTS = {
+      anchorY: 0.33,
+      dropK: 0.14,
+      xBiasFrac: 0,
+      yBiasFrac: 0
     };
 
-    const ALPHA_POS=0.16, ALPHA_SCALE=0.12, HOLD_MS=600;
-    let ANCHOR_Y_FRAC=0.33, DROP_K=0.14;  // あなたの決定値を既定に
-    const FIT_GAIN=1.0;
+    // ====== Elements ======
+    const stage   = document.getElementById('stage');
+    const videoEl = document.getElementById('video');
+    const garment = document.getElementById('garment');
+    const fab     = document.getElementById('fab');
+    const panel   = document.getElementById('panel');
+    const chkMirror = document.getElementById('chkMirror');
+    const rngX = document.getElementById('rngX');
+    const rngY = document.getElementById('rngY');
+    const valX = document.getElementById('valX');
+    const valY = document.getElementById('valY');
+    const btnReset = document.getElementById('btnReset');
+    const btnRestart = document.getElementById('btnRestart');
+    const presetInfo = document.getElementById('presetInfo');
+    const statusEl = document.getElementById('status');
+    const pcOverlay = document.getElementById('pcOverlay');
+    const uaTxt = document.getElementById('uaTxt');
 
-    let stream=null, facing='user', mirror=true;
-    let landmarker=null, fileset=null;
-    let lastDetMS=0, smX=null, smY=null, smS=1;
-    let garmentNatW=0, garmentNatH=0, garmentConf=null, autoDropPx=0;
+    // ====== State ======
+    let PRESET = { ...DEFAULTS };
+    let garmentMeta = null;  // { image, px_chest_hint, chest_cm, shoulder_cm, anchorY, _w, _h }
+    let fileset, landmarker;
+    let running = true;
+    let lastHasPoseTs = 0;
 
-    const isMobile=/Android|iPhone|iPad|iPod/i.test(navigator.userAgent||'');
-    if(!isMobile){ els.pcOnly.style.display='grid'; els.uaText.textContent=navigator.userAgent; }
+    let prevTx = NaN, prevTy = NaN, prevScale = NaN;
 
-    els.garment.addEventListener('load', ()=>{
-      garmentNatW=els.garment.naturalWidth||els.garment.width||1000;
-      garmentNatH=els.garment.naturalHeight||els.garment.height||1000;
-    });
+    // user micro offsets (px)
+    window.userOffsetX_px = 0;
+    window.userOffsetY_px = 0;
 
-    const sleep=ms=>new Promise(r=>setTimeout(r,ms));
-    const lerp=(a,b,t)=>a+(b-a)*t;
+    // mirror
+    let mirrored = false;
 
-    async function startCamera(){
+    // ===== Utilities =====
+    const sleep = (ms)=> new Promise(r=>setTimeout(r,ms));
+
+    function stripBOM(text){
+      return text.replace(/^\uFEFF/,'');
+    }
+    async function strictFetchJSON(url){
+      const res = await fetch(url, { cache: "no-store" });
+      const txt = stripBOM(await res.text());
       try{
-        if(stream){ stream.getTracks().forEach(t=>t.stop()); }
-        const constraints={ audio:false, video:{ facingMode:facing, width:{ideal:1280}, height:{ideal:720} } };
-        stream=await navigator.mediaDevices.getUserMedia(constraints);
-        els.video.srcObject=stream;
-        await els.video.play().catch(()=>{});
-        els.startScreen.style.display='none';
-        applyMirror();
-        if(!landmarker){ await initPose(); }
-        requestAnimationFrame(tick);
+        return JSON.parse(txt);
       }catch(err){
-        console.error('startCamera error:', err);
-        alert('カメラの開始に失敗しました。ブラウザの許可設定をご確認ください。');
+        console.error("JSON parse error:", url, err);
+        throw new Error(`JSON parse error @ ${url}`);
       }
     }
-    async function stopCamera(){ if(stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; } }
-    async function restartCamera(){ await stopCamera(); await sleep(50); await startCamera(); }
 
-    async function initPose(){
-      const files=await vision.FilesetResolver.forVisionTasks(WASM_BASE);
-      fileset=files;
-      landmarker=await vision.PoseLandmarker.createFromOptions(fileset,{
-        baseOptions:{ modelAssetPath:`${WASM_BASE}pose_landmarker_lite.task` },
-        runningMode:'VIDEO', numPoses:1,
-        minPoseDetectionConfidence:0.5, minPosePresenceConfidence:0.5, minTrackingConfidence:0.5,
+    function pickPresetFromUA(presets, ua) {
+      const models = presets.models || [];
+      for (const m of models) {
+        if (!m.match) continue;
+        const re = new RegExp(m.match, 'i');
+        if (re.test(ua)) return { ...presets.defaults, ...m };
+      }
+      return { ...(presets.defaults || {}) };
+    }
+
+    function lerp(a, b, alpha){
+      if (Number.isNaN(a)) return b;
+      return a + (b - a) * alpha;
+    }
+
+    function isMobileUA(){
+      return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    }
+
+    // ===== Load garments.json (first key only) =====
+    async function loadGarmentMeta(){
+      const all = await strictFetchJSON("./garments.json");
+      const firstKey = Object.keys(all)[0];
+      const g = all[firstKey] || {};
+      const meta = {
+        name: g.name ?? "garment",
+        image: g.image ?? "public/garments/trainer.png",
+        px_chest_hint: g.px_chest_hint ?? 980,
+        chest_cm: g.chest_cm ?? null,
+        shoulder_cm: g.shoulder_cm ?? null,
+        anchorY: (typeof g.anchorY === 'number') ? g.anchorY : DEFAULTS.anchorY,
+        anchorX: (typeof g.anchorX === 'number') ? g.anchorX : 0.5  // 中央固定（左右対称前提）
+      };
+      return meta;
+    }
+
+    // ===== Camera =====
+    async function startCamera(){
+      const constraints = {
+        video: {
+          facingMode: "user",    // セルフィー（鏡UI向け）
+          width: { ideal: 1280 },
+          height:{ ideal: 720 }
+        },
+        audio: false
+      };
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      videoEl.srcObject = stream;
+      await videoEl.play();
+    }
+
+    // ===== Pose Landmarker =====
+    async function initLandmarker(){
+      fileset = await FilesetResolver.forVisionTasks("./vendor/mediapipe/wasm");
+      landmarker = await PoseLandmarker.createFromOptions(fileset, {
+        baseOptions: {
+          modelAssetPath: "./vendor/mediapipe/wasm/pose_landmarker_lite.task",
+        },
+        runningMode: "VIDEO",
+        numPoses: 1
       });
     }
 
-    async function loadGarmentConfig(){
-      try{
-        const r=await fetch('garments.json',{cache:'no-store'});
-        if(!r.ok) throw new Error('HTTP '+r.status);
-        const data=await r.json();
-        const firstKey=Object.keys(data)[0];
-        garmentConf=data[firstKey]||null;
-      }catch(e){ console.warn('garments.json 読込失敗:', e); }
-    }
+    // ===== Main Loop =====
+    async function runLoop(){
+      const process = async () => {
+        if (!running || videoEl.readyState < 2) {
+          requestAnimationFrame(process);
+          return;
+        }
+        const ts = performance.now();
+        const res = await landmarker.detectForVideo(videoEl, ts);
 
-    // ここを強化：BOM除去＋先頭文字チェック＋エラーメッセージ詳細
-    async function loadPresets(){
-      try{
-        const r=await fetch('presets.json',{cache:'no-store'});
-        if(!r.ok) throw new Error('HTTP '+r.status);
-        let txt=await r.text();
-        txt=txt.replace(/^\uFEFF/,'').trim();            // ← BOM除去
-        if(!txt.startsWith('{')) throw new Error('not JSON (starts with "'+txt.slice(0,20).replace(/\s/g,' ')+'…")');
-        let cfg; try{ cfg=JSON.parse(txt); }             // ← 厳密JSON parse
-        catch(e){ throw new Error('JSON parse error'); }
+        const stageW = stage.clientWidth;
+        const stageH = stage.clientHeight;
 
-        const ua=navigator.userAgent||'';
-        let anchor=cfg?.defaults?.anchorY ?? ANCHOR_Y_FRAC;
-        let dropK =cfg?.defaults?.dropK  ?? DROP_K;
-        let matched=false;
+        let hasPose = false;
 
-        if(Array.isArray(cfg?.models)){
-          for(const m of cfg.models){
-            const re=new RegExp(m.match,'i');
-            if(re.test(ua)){ matched=true;
-              if(typeof m.anchorY==='number') anchor=m.anchorY;
-              if(typeof m.dropK==='number')   dropK =m.dropK;
-              break;
+        if (res && res.landmarks && res.landmarks[0]) {
+          const lm = res.landmarks[0];
+          const L = lm[11]; // left shoulder
+          const R = lm[12]; // right shoulder
+          if (L && R) {
+            hasPose = true;
+            lastHasPoseTs = ts;
+
+            // 1) shoulder center (normalized → px)
+            const cx = ((L.x + R.x) * 0.5) * stageW;
+            const cy = ((L.y + R.y) * 0.5) * stageH;
+
+            // 2) shoulder width (px)
+            const shoulderPX = Math.abs(R.x - L.x) * stageW;
+
+            // 3) chest width px estimate
+            let chestPX = shoulderPX;
+            if (garmentMeta.chest_cm && garmentMeta.shoulder_cm) {
+              chestPX = shoulderPX * (garmentMeta.chest_cm / garmentMeta.shoulder_cm);
+            }
+
+            // 4) auto drop
+            const dropK = (typeof PRESET.dropK === 'number') ? PRESET.dropK : DEFAULTS.dropK;
+            const autoDropPx = shoulderPX * dropK;
+
+            // 5) scale vs px_chest_hint
+            const pxHint = garmentMeta.px_chest_hint || 980;
+            const rawScale = (chestPX / pxHint) * FIT_GAIN;
+
+            // 6) target (screen) position base: shoulder center + drop
+            let tx = cx;
+            let ty = cy + autoDropPx;
+
+            // 7) add preset biases (frac → px)
+            tx += (PRESET.xBiasFrac || 0) * stageW;
+            ty += (PRESET.yBiasFrac || 0) * stageH;
+
+            // 8) add user UI offsets (px)
+            tx += (window.userOffsetX_px || 0);
+            ty += (window.userOffsetY_px || 0);
+
+            // 9) smooth
+            const s = prevScale = lerp(prevScale, rawScale, ALPHA_SCALE);
+            const sx = prevTx    = lerp(prevTx,    tx,       ALPHA_POS);
+            const sy = prevTy    = lerp(prevTy,    ty,       ALPHA_POS);
+
+            // 10) place garment (anchor is (anchorX, anchorY) in image coordinates)
+            if (garmentMeta._w && garmentMeta._h) {
+              const gw = garmentMeta._w * s;
+              const gh = garmentMeta._h * s;
+
+              const left = sx - gw * (garmentMeta.anchorX ?? 0.5);
+              const top  = sy - gh * (garmentMeta.anchorY ?? PRESET.anchorY ?? DEFAULTS.anchorY);
+
+              garment.style.width = `${gw}px`;
+              garment.style.left  = `${left}px`;
+              garment.style.top   = `${top}px`;
+              garment.style.opacity = '1';
             }
           }
         }
-        ANCHOR_Y_FRAC=anchor; DROP_K=dropK;
-        els.presetInfo.textContent = matched
-          ? `applied: anchorY=${ANCHOR_Y_FRAC.toFixed(2)} / dropK=${DROP_K.toFixed(3)}`
-          : `defaults: anchorY=${ANCHOR_Y_FRAC.toFixed(2)} / dropK=${DROP_K.toFixed(3)}`;
-      }catch(e){
-        els.presetInfo.textContent='load error: '+e.message;
-        console.warn('presets.json 読込失敗:', e);
-      }
-    }
 
-    function updateGarmentTransform(){
-      if(garmentNatW===0||!garmentConf) return;
-      let s=1;
-      if(updateGarmentTransform._shoulderPX){
-        const pxHint=garmentConf.px_chest_hint||980;
-        let chestPx=updateGarmentTransform._shoulderPX;
-        if(garmentConf.chest_cm && garmentConf.shoulder_cm){
-          chestPx*= (garmentConf.chest_cm/garmentConf.shoulder_cm);
-        }
-        const autoS=(pxHint>0)?(chestPx/pxHint):1;
-        s=lerp(1,autoS,FIT_GAIN);
-      }
-      smS=(smS==null)?s:lerp(smS,s,ALPHA_SCALE);
-
-      const W=els.stage.clientWidth, H=els.stage.clientHeight;
-      const cx=updateGarmentTransform._cx ?? (W/2);
-      const cy=updateGarmentTransform._cy ?? (H/2);
-      smX=(smX==null)?cx:lerp(smX,cx,ALPHA_POS);
-      smY=(smY==null)?cy:lerp(smY,cy,ALPHA_POS);
-
-      const w=garmentNatW*smS, h=garmentNatH*smS;
-      const desiredY=smY+autoDropPx;
-      const anchorOffset=(0.5-ANCHOR_Y_FRAC)*h;
-
-      const offX=parseInt(els.offX.value,10)||0;
-      const offY=parseInt(els.offY.value,10)||0;
-
-      els.garment.style.width=`${w}px`;
-      els.garment.style.left =`${smX+offX}px`;
-      els.garment.style.top  =`${desiredY+anchorOffset+offY}px`;
-    }
-
-    async function tick(){
-      if(!landmarker||!els.video||!els.video.videoWidth){ requestAnimationFrame(tick); return; }
-      const W=els.stage.clientWidth, H=els.stage.clientHeight;
-      const now=performance.now(); let ok=false;
-
-      try{
-        const result=landmarker.detectForVideo(els.video,now);
-        const lm=(result.landmarks && result.landmarks[0])?result.landmarks[0]:null;
-        if(lm){
-          const L=lm[11], R=lm[12];
-          if(L&&R){
-            let cx=(L.x+R.x)/2*W, cy=(L.y+R.y)/2*H;
-            if(mirror){ cx=W-cx; }
-            const shoulderPX=Math.abs(R.x-L.x)*W;
-            updateGarmentTransform._shoulderPX=shoulderPX;
-            autoDropPx=shoulderPX*DROP_K;
-            updateGarmentTransform._cx=cx; updateGarmentTransform._cy=cy;
-            lastDetMS=now; ok=true;
+        // HOLD: keep last frame for HOLD_MS
+        if (!hasPose) {
+          const dt = performance.now() - lastHasPoseTs;
+          if (dt > HOLD_MS) {
+            garment.style.opacity = '0';
           }
         }
-      }catch(e){ console.warn('pose detect error:', e); }
 
-      const hold=(now-lastDetMS)<HOLD_MS;
-      const wantShow=ok||hold;
-      els.garment.style.display=wantShow?'block':'none';
-      els.garment.style.opacity=wantShow?'1':'0';
-
-      updateGarmentTransform();
-      requestAnimationFrame(tick);
+        requestAnimationFrame(process);
+      };
+      requestAnimationFrame(process);
     }
 
-    function applyMirror(){
-      els.video.classList.toggle('mirror', mirror);
-      els.garment.classList.toggle('mirror', mirror);
+    // ===== UI =====
+    function togglePanel(){
+      panel.classList.toggle('show');
     }
+    fab.addEventListener('click', togglePanel);
 
-    els.toggle.addEventListener('click', ()=> els.panel.classList.toggle('open'));
-    els.modeBtn.addEventListener('click', async ()=>{
-      facing=(facing==='user')?'environment':'user';
-      mirror=(facing==='user'); applyMirror();
-      els.modeBtn.textContent=(facing==='user')?'イン（ミラーON）に起動中':'アウト（ミラーOFF）に起動中';
-      await restartCamera();
+    chkMirror.addEventListener('change', (e)=>{
+      mirrored = !!e.target.checked;
+      [videoEl, garment].forEach(el=>{
+        el.classList.toggle('mirror', mirrored);
+      });
     });
-    els.mirrorChk.addEventListener('change', ()=>{ mirror=!!els.mirrorChk.checked; applyMirror(); });
-    ['offX','offY'].forEach(id=> els[id].addEventListener('input', updateGarmentTransform));
-    els.startBtn.addEventListener('click', startCamera);
-    els.stopBtn.addEventListener('click', stopCamera);
-    els.restartBtn.addEventListener('click', restartCamera);
-    window.addEventListener('resize', ()=>{ smX=null; smY=null; updateGarmentTransform(); });
 
-    (async ()=>{
-      els.mirrorChk.checked=mirror;
-      els.modeBtn.textContent='イン（ミラーON）に起動中';
-      await loadPresets();       // ← プリセット先に
-      await loadGarmentConfig(); // ← 服寸法ヒント
+    function updateRangeLabels(){
+      valX.textContent = String(window.userOffsetX_px|0);
+      valY.textContent = String(window.userOffsetY_px|0);
+    }
+    rngX.addEventListener('input', (e)=>{
+      window.userOffsetX_px = parseInt(e.target.value,10) || 0;
+      updateRangeLabels();
+    });
+    rngY.addEventListener('input', (e)=>{
+      window.userOffsetY_px = parseInt(e.target.value,10) || 0;
+      updateRangeLabels();
+    });
+    btnReset.addEventListener('click', ()=>{
+      window.userOffsetX_px = 0;
+      window.userOffsetY_px = 0;
+      rngX.value = "0"; rngY.value = "0";
+      updateRangeLabels();
+    });
+
+    btnRestart.addEventListener('click', ()=>{
+      running = !running;
+      btnRestart.textContent = running ? "停止" : "再開";
+      if (running) lastHasPoseTs = performance.now();
+    });
+
+    function updatePresetInfo(){
+      const p = PRESET;
+      const gy = (typeof garmentMeta?.anchorY === 'number') ? garmentMeta.anchorY : (p.anchorY ?? DEFAULTS.anchorY);
+      presetInfo.textContent =
+        `preset: anchorY=${gy.toFixed(3)}, dropK=${(p.dropK??DEFAULTS.dropK).toFixed(3)}, `
+        + `xBias=${((p.xBiasFrac||0)*100).toFixed(1)}%, yBias=${((p.yBiasFrac||0)*100).toFixed(1)}%`;
+    }
+
+    // ===== Boot =====
+    (async function main(){
+      try{
+        // PC overlay
+        const ua = navigator.userAgent || '';
+        uaTxt.textContent = ua;
+        if (!isMobileUA()) {
+          pcOverlay.classList.add('show');
+        }
+
+        statusEl.textContent = 'loading presets…';
+        const presets = await strictFetchJSON("./presets.json");
+        const picked = pickPresetFromUA(presets, ua);
+        PRESET = { ...DEFAULTS, ...picked };
+
+        statusEl.textContent = 'loading garment…';
+        garmentMeta = await loadGarmentMeta();
+
+        // load garment image and cache natural size
+        await new Promise((resolve, reject)=>{
+          garment.onload = ()=>{
+            garmentMeta._w = garment.naturalWidth;
+            garmentMeta._h = garment.naturalHeight;
+            resolve();
+          };
+          garment.onerror = reject;
+          garment.src = garmentMeta.image;
+        });
+
+        updatePresetInfo();
+        updateRangeLabels();
+
+        statusEl.textContent = 'starting camera…';
+        await startCamera();
+
+        statusEl.textContent = 'loading pose model…';
+        await initLandmarker();
+
+        statusEl.textContent = 'running';
+        await sleep(50);
+        statusEl.style.display = 'none';
+
+        // Start mirrored OFF by default; user can toggle
+        [videoEl, garment].forEach(el=>el.classList.toggle('mirror', mirrored));
+
+        runLoop();
+
+        // resize safety
+        window.addEventListener('resize', ()=>{
+          // force a slight recompute on next frame
+          prevTx = prevTy = prevScale = NaN;
+        });
+
+      }catch(err){
+        console.error(err);
+        statusEl.textContent = 'error: ' + err.message;
+      }
     })();
   </script>
 </body>
