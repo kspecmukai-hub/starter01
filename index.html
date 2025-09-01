@@ -17,12 +17,17 @@
       display:none; pointer-events:none; opacity:0; transition:opacity .22s ease;
       will-change:left, top, width, opacity, filter;
     }
+
+    /* PC専用オーバーレイ */
     #pcOnly{ position:absolute; inset:0; display:none; place-items:center; color:#fff; padding:24px; text-align:center; }
     #pcOnly .card{ background:transparent; padding:22px 24px; border-radius:16px; border:1px solid rgba(255,255,255,.25) }
     #pcOnly h1{ margin:0 0 10px; font-size:20px; }
     #pcOnly p{ margin:8px 0; opacity:.95; line-height:1.6; }
-    #pcOnly .mono{ font:12px ui-monospace,monospace; opacity:.8; }
+    #pcOnly .qrWrap{ margin-top:12px; display:grid; place-items:center; gap:8px; }
+    #pcOnly .qrWrap img{ width:220px; height:220px; image-rendering:pixelated; background:#fff; padding:8px; border-radius:12px; }
+    #pcOnly .hint{ font-size:12px; opacity:.85; }
 
+    /* スタート画面 */
     #startScreen{ position:absolute; inset:0; display:grid; place-items:center; background:rgba(0,0,0,.45); }
     #startCard{ background:transparent; color:#fff; padding:24px 28px; border-radius:16px; border:1px solid rgba(255,255,255,.25) }
     #startCard h1{ margin:0 0 10px; font-size:22px; }
@@ -34,6 +39,7 @@
     .btn.primary{ background:var(--ui-accent); color:#053; }
     .btn.ghost{ background:rgba(255,255,255,.12); color:#fff; }
 
+    /* 設定パネル */
     #panel{
       position:absolute; right:18px; bottom:86px; width:320px; max-width:92vw;
       background:transparent; color:#fff; border-radius:16px; padding:8px 10px; display:none;
@@ -47,6 +53,7 @@
     input[type="range"], input[type="checkbox"]{ width:100%; }
     .mono{ font:12px ui-monospace,monospace; opacity:.95; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 
+    /* ⚙トグル */
     #toggle{
       position:absolute; right:20px; bottom:20px; width:48px; height:48px; border-radius:50%;
       display:grid; place-items:center; background:#10b981; color:#002; font-weight:800; cursor:pointer;
@@ -63,14 +70,19 @@
     <video id="video" autoplay playsinline muted></video>
     <img id="garment" alt="garment" src="public/garments/trainer.png" />
 
+    <!-- PC専用案内（文言更新・UA非表示・QR表示） -->
     <div id="pcOnly">
       <div class="card">
         <h1>スマホ専用です 📱</h1>
-        <p>このデモはスマートフォン（iOS/Android）のブラウザでご利用ください。<br>PCでは動作確認のみ可能です。</p>
-        <p class="mono" id="uaText"></p>
+        <p>このバーチャル試着ソフトはスマートフォン（iOS/Android）のブラウザでご利用ください。</p>
+        <div class="qrWrap">
+          <img id="qrImg" alt="QRコード（スマホで開く）" />
+          <p class="hint">スマホのカメラでQRを読み取って開いてください。</p>
+        </div>
       </div>
     </div>
 
+    <!-- スタートカード（モバイル用） -->
     <div id="startScreen">
       <div id="startCard">
         <h1>カメラの準備をします</h1>
@@ -80,6 +92,7 @@
       </div>
     </div>
 
+    <!-- 設定パネル -->
     <div id="panel" role="dialog" aria-modal="false" aria-label="設定">
       <h2>設定</h2>
       <div class="row">
@@ -106,7 +119,6 @@
       video: document.getElementById('video'),
       garment: document.getElementById('garment'),
       pcOnly: document.getElementById('pcOnly'),
-      uaText: document.getElementById('uaText'),
       startScreen: document.getElementById('startScreen'),
       startBtn: document.getElementById('startBtn'),
       toggle: document.getElementById('toggle'),
@@ -117,6 +129,7 @@
       offY: document.getElementById('offY'),
       stopBtn: document.getElementById('stopBtn'),
       restartBtn: document.getElementById('restartBtn'),
+      qrImg: document.getElementById('qrImg')
     };
 
     // ==== 現行ベース（基礎値据え置き） ====
@@ -142,10 +155,21 @@
 
     const isMobile=/Android|iPhone|iPad|iPod/i.test(navigator.userAgent||'');
     if(!isMobile){
+      // PC用表示：案内とQRのみ見せる
       els.pcOnly.style.display='grid';
-      els.uaText.textContent=navigator.userAgent;
-      // PCではスタートオーバーレイを隠す（スマホ専用の案内のみ）
       els.startScreen.style.display='none';
+      // PCでは設定ボタンを非表示
+      els.toggle.style.display='none';
+      els.panel.classList.remove('open');
+      els.toggle.setAttribute('aria-hidden','true');
+
+      // QRコード画像を生成（Google Chart → 失敗時は qrserver にフォールバック）
+      const url = location.href.split('#')[0];
+      const enc = encodeURIComponent(url);
+      const primary = `https://chart.googleapis.com/chart?chs=220x220&cht=qr&chl=${enc}&chld=H|0`;
+      const fallback = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${enc}`;
+      els.qrImg.onerror = ()=>{ els.qrImg.onerror=null; els.qrImg.src=fallback; };
+      els.qrImg.src = primary;
     }
 
     els.garment.addEventListener('load', ()=>{
