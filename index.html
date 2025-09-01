@@ -22,13 +22,16 @@
     #pcOnly h1{ margin:0 0 10px; font-size:20px; }
     #pcOnly p{ margin:8px 0; opacity:.95; line-height:1.6; }
     #pcOnly .mono{ font:12px ui-monospace,monospace; opacity:.8; }
+
     #startScreen{ position:absolute; inset:0; display:grid; place-items:center; background:rgba(0,0,0,.45); }
     #startCard{ background:transparent; color:#fff; padding:24px 28px; border-radius:16px; border:1px solid rgba(255,255,255,.25) }
     #startCard h1{ margin:0 0 10px; font-size:22px; }
     #startCard p{ margin:10px 0 14px; line-height:1.7; opacity:.95; }
+
     .btn{ appearance:none; border:0; border-radius:10px; padding:12px 16px; font-weight:700; cursor:pointer; }
     .btn.primary{ background:var(--ui-accent); color:#053; }
     .btn.ghost{ background:rgba(255,255,255,.12); color:#fff; }
+
     #panel{
       position:absolute; right:18px; bottom:86px; width:320px; max-width:92vw;
       background:transparent; color:#fff; border-radius:16px; padding:8px 10px; display:none;
@@ -40,6 +43,7 @@
     .row > label{ fontサイズ:12px; opacity:.95; text-shadow:0 1px 2px rgba(0,0,0,.4); }
     input[type="range"], input[type="checkbox"]{ width:100%; }
     .mono{ font:12px ui-monospace,monospace; opacity:.95; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
     #toggle{
       position:absolute; right:20px; bottom:20px; width:48px; height:48px; border-radius:50%;
       display:grid; place-items:center; background:#10b981; color:#002; font-weight:800; cursor:pointer;
@@ -75,11 +79,14 @@
 
     <div id="panel" role="dialog" aria-modal="false" aria-label="設定">
       <h2>設定</h2>
-      <div class="row"><label>カメラ</label><button id="modeBtn" type="button" class="btn ghost" style="padding:8px 10px">イン（ミラーON）に起動中</button></div>
+      <div class="row">
+        <label>カメラ</label>
+        <button id="modeBtn" type="button" class="btn ghost" style="padding:8px 10px">インカメラ起動中</button>
+      </div>
       <div class="row"><label>ミラー</label><input id="mirrorChk" type="checkbox" checked /></div>
       <div class="row"><label>横位置（微調整）</label><input id="offX" type="range" min="-80" max="80" value="10" /></div>
       <div class="row"><label>縦位置（微調整）</label><input id="offY" type="range" min="-120" max="120" value="10" /></div>
-      <div class="row"><label>プリセット</label><div id="presetInfo" class="mono">loading…</div></div>
+      <!-- プリセット行は削除 -->
       <div class="row"><button id="stopBtn" class="btn ghost">停止</button><button id="restartBtn" class="btn ghost">再起動</button></div>
     </div>
 
@@ -104,21 +111,20 @@
       mirrorChk: document.getElementById('mirrorChk'),
       offX: document.getElementById('offX'),
       offY: document.getElementById('offY'),
-      presetInfo: document.getElementById('presetInfo'),
       stopBtn: document.getElementById('stopBtn'),
       restartBtn: document.getElementById('restartBtn'),
     };
 
     // ==== 現行ベース（基礎値据え置き） ====
-    const ALPHA_POS=0.16, ALPHA_SCALE=0.12, ALPHA_BRIGHT=0.35, HOLD_MS=900; // ← HOLD延長
-    let ANCHOR_Y_FRAC=0.33, DROP_K=0.147;   // ロールバック値
+    const ALPHA_POS=0.16, ALPHA_SCALE=0.12, ALPHA_BRIGHT=0.35, HOLD_MS=900;
+    let ANCHOR_Y_FRAC=0.33, DROP_K=0.147;
     const FIT_GAIN=1.0;
 
     // 距離しきい値を緩和 + 無効デバウンス
-    const SHOULDER_MIN_FRAC=0.04;   // ← 0.06 から緩和（遠くても消えにくい）
-    const SHOULDER_MAX_FRAC=0.72;   // ← 0.55 から緩和（近くても消えにくい）
-    const STABLE_ARM=3;             // 連続3フレームで表示アーム完了
-    const INVALID_GRACE=8;          // 連続8フレーム無効になったら非表示
+    const SHOULDER_MIN_FRAC=0.04;
+    const SHOULDER_MAX_FRAC=0.72;
+    const STABLE_ARM=3;
+    const INVALID_GRACE=8;
 
     let stream=null, facing='user', mirror=true;
     let landmarker=null, fileset=null;
@@ -186,7 +192,7 @@
       }catch(e){ console.warn('garments.json 読込失敗:', e); }
     }
 
-    // BOM除去＋厳密JSONパース＋UAマッチ
+    // BOM除去＋厳密JSONパース＋UAマッチ（UI表示なし）
     async function loadPresets(){
       try{
         const r=await fetch('presets.json',{cache:'no-store'});
@@ -194,29 +200,9 @@
         let txt=await r.text();
         txt=txt.replace(/^\uFEFF/,'').trim();
         if(!txt.startsWith('{')) throw new Error('not JSON (starts with "'+txt.slice(0,20).replace(/\s/g,' ')+'…")');
-        let cfg; try{ cfg=JSON.parse(txt); } catch(e){ throw new Error('JSON parse error'); }
-
-        const ua=navigator.userAgent||'';
-        let anchor=cfg?.defaults?.anchorY ?? ANCHOR_Y_FRAC;
-        let dropK =cfg?.defaults?.dropK  ?? DROP_K;
-        let matched=false;
-
-        if(Array.isArray(cfg?.models)){
-          for(const m of cfg.models){
-            const re=new RegExp(m.match,'i');
-            if(re.test(ua)){ matched=true;
-              if(typeof m.anchorY==='number') anchor=m.anchorY;
-              if(typeof m.dropK==='number')   dropK =m.dropK;
-              break;
-            }
-          }
-        }
-        ANCHOR_Y_FRAC=anchor; DROP_K=dropK;
-        els.presetInfo.textContent = matched
-          ? `applied: anchorY=${ANCHOR_Y_FRAC.toFixed(2)} / dropK=${DROP_K.toFixed(3)}`
-          : `defaults: anchorY=${ANCHOR_Y_FRAC.toFixed(2)} / dropK=${DROP_K.toFixed(3)}`;
+        JSON.parse(txt); // 値は内部既定に反映する想定ならここで読み取り
+        // ※UI表示は削除したため何も表示しない
       }catch(e){
-        els.presetInfo.textContent='load error: '+e.message;
         console.warn('presets.json 読込失敗:', e);
       }
     }
@@ -242,7 +228,6 @@
       smY=(smY==null)?cy:lerp(smY,cy,ALPHA_POS);
 
       const w=garmentNatW*smS, h=garmentNatH*smS;
-      // 距離補正：k=0.13（近距離でやや下げ、遠距離でわずかに上げ）
       const desiredY=smY+autoDropPx - ((1-smS) * updateGarmentTransform._shoulderPX * 0.13);
       const anchorOffset=(0.5-ANCHOR_Y_FRAC)*h;
 
@@ -270,7 +255,6 @@
             const shoulderPX=Math.abs(R.x-L.x)*W;
             const shoulderFrac=shoulderPX/Math.max(1,W);
 
-            // 緩和しきい値チェック
             valid = (shoulderFrac>SHOULDER_MIN_FRAC && shoulderFrac<SHOULDER_MAX_FRAC);
 
             if(valid){
@@ -278,14 +262,14 @@
               autoDropPx=shoulderPX*DROP_K;
               updateGarmentTransform._cx=cx; updateGarmentTransform._cy=cy;
 
-              // 明るさ計測（肩中心まわりのROI）＆反映
+              // 明るさ計測
               try{
                 const vw=els.video.videoWidth, vh=els.video.videoHeight;
                 const cxN=(L.x+R.x)/2, cyN=(L.y+R.y)/2;
                 const wN=Math.min(Math.abs(R.x-L.x)*1.2, 0.6);
                 const hN=wN;
                 const sx=(cxN - wN/2)*vw;
-                const sy=(cyN - hN*0.55)*vh; // 顔〜襟〜胸を広めに
+                const sy=(cyN - hN*0.55)*vh;
                 const sw=wN*vw, sh=hN*vh;
 
                 _sctx.clearRect(0,0,32,32);
@@ -295,7 +279,7 @@
                 for(let i=0;i<buf.length;i+=4){
                   acc += 0.2126*buf[i] + 0.7152*buf[i+1] + 0.0722*buf[i+2];
                 }
-                const mean=(acc/(32*32))/255; // 0..1
+                const mean=(acc/(32*32))/255;
                 const target=Math.max(0.65, Math.min(1.35, 1 + (mean-0.55)*1.20));
                 smB = (smB==null)?target : (smB + (target-smB)*ALPHA_BRIGHT);
                 els.garment.style.filter = `brightness(${smB.toFixed(3)})`;
@@ -314,11 +298,10 @@
         }
       }catch(e){ console.warn('pose detect error:', e); }
 
-      // 表示制御：アーム完了後のみ、検出OK or HOLD or デバウンス中は表示継続
       const hold=(now-lastDetMS)<HOLD_MS;
       const debouncing = (invalidCount>0 && invalidCount<INVALID_GRACE);
       const wantShow = isArmed && (ok || hold || debouncing);
-      if(!wantShow && invalidCount>=INVALID_GRACE){ stableCount=0; } // 長く無効なら表示解除
+      if(!wantShow && invalidCount>=INVALID_GRACE){ stableCount=0; }
 
       els.garment.style.display = wantShow ? 'block' : 'none';
       els.garment.style.opacity = wantShow ? '1' : '0';
@@ -332,11 +315,12 @@
       els.garment.classList.toggle('mirror', mirror);
     }
 
+    // UIイベント
     els.toggle.addEventListener('click', ()=> els.panel.classList.toggle('open'));
     els.modeBtn.addEventListener('click', async ()=>{
       facing=(facing==='user')?'environment':'user';
       mirror=(facing==='user'); applyMirror();
-      els.modeBtn.textContent=(facing==='user')?'イン（ミラーON）に起動中':'アウト（ミラーOFF）に起動中';
+      els.modeBtn.textContent=(facing==='user')?'インカメラ起動中':'アウトカメラ起動中';
       await restartCamera();
     });
     els.mirrorChk.addEventListener('change', ()=>{ mirror=!!els.mirrorChk.checked; applyMirror(); });
@@ -348,9 +332,9 @@
 
     (async ()=>{
       els.mirrorChk.checked=mirror;
-      els.modeBtn.textContent='イン（ミラーON）に起動中';
-      await loadPresets();       // ← プリセット先に
-      await loadGarmentConfig(); // ← 服寸法ヒント
+      els.modeBtn.textContent='インカメラ起動中';
+      await loadPresets();       // 内部適用のみ
+      await loadGarmentConfig(); // 服寸法ヒント
     })();
   </script>
 </body>
