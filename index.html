@@ -109,21 +109,22 @@
       restartBtn: document.getElementById('restartBtn'),
     };
 
-    // ==== 現行ベース ====
-    const ALPHA_POS=0.16, ALPHA_SCALE=0.12, ALPHA_BRIGHT=0.35, HOLD_MS=600;
+    // ==== 現行ベース（基礎値据え置き） ====
+    const ALPHA_POS=0.16, ALPHA_SCALE=0.12, ALPHA_BRIGHT=0.35, HOLD_MS=900; // ← HOLD延長
     let ANCHOR_Y_FRAC=0.33, DROP_K=0.145;   // ロールバック値
     const FIT_GAIN=1.0;
 
-    // 近/遠すぎの無効判定と「安定表示」アーム
-    const SHOULDER_MIN_FRAC=0.06;   // 肩幅が画面幅の6%未満 → 近すぎ/遠すぎ扱い
-    const SHOULDER_MAX_FRAC=0.55;   // 55%以上 → 近すぎ扱い
+    // 距離しきい値を緩和 + 無効デバウンス
+    const SHOULDER_MIN_FRAC=0.04;   // ← 0.06 から緩和（遠くても消えにくい）
+    const SHOULDER_MAX_FRAC=0.72;   // ← 0.55 から緩和（近くても消えにくい）
     const STABLE_ARM=3;             // 連続3フレームで表示アーム完了
+    const INVALID_GRACE=8;          // 連続8フレーム無効になったら非表示
 
     let stream=null, facing='user', mirror=true;
     let landmarker=null, fileset=null;
     let lastDetMS=0, smX=null, smY=null, smS=1, smB=1;
     let garmentNatW=0, garmentNatH=0, garmentConf=null, autoDropPx=0;
-    let stableCount=0, isArmed=false;
+    let stableCount=0, isArmed=false, invalidCount=0;
 
     // 明るさサンプル用オフスクリーンCanvas
     const _samp = document.createElement('canvas'); _samp.width=32; _samp.height=32;
@@ -149,13 +150,12 @@
         await els.video.play().catch(()=>{});
         els.startScreen.style.display='none';
         applyMirror();
-        // ==== ここで状態を完全リセット（貼り付き防止） ====
+        // 状態リセット
         smX=null; smY=null; smS=1; smB=1;
-        stableCount=0; isArmed=false;
+        stableCount=0; isArmed=false; invalidCount=0;
         lastDetMS=0;
         els.garment.style.display='none';
         els.garment.style.opacity='0';
-        // ===================================================
         if(!landmarker){ await initPose(); }
         requestAnimationFrame(tick);
       }catch(err){
@@ -270,7 +270,7 @@
             const shoulderPX=Math.abs(R.x-L.x)*W;
             const shoulderFrac=shoulderPX/Math.max(1,W);
 
-            // 近/遠すぎチェック
+            // 緩和しきい値チェック
             valid = (shoulderFrac>SHOULDER_MIN_FRAC && shoulderFrac<SHOULDER_MAX_FRAC);
 
             if(valid){
@@ -302,24 +302,24 @@
               }catch(_){}
             }
 
-            // 安定化（アーム）判定
+            // アーム & デバウンス
             if(valid){
               stableCount = Math.min(STABLE_ARM, stableCount+1);
+              invalidCount = 0;
+              if(stableCount>=STABLE_ARM){ isArmed=true; ok=true; lastDetMS=now; }
             }else{
-              stableCount = Math.max(0, stableCount-1);
-            }
-            if(stableCount>=STABLE_ARM){
-              isArmed=true;
-              lastDetMS=now;
-              ok=true;
+              if(isArmed){ invalidCount = Math.min(INVALID_GRACE, invalidCount+1); }
             }
           }
         }
       }catch(e){ console.warn('pose detect error:', e); }
 
-      // 表示制御：アーム完了後のみ、検出orHOLDで表示
+      // 表示制御：アーム完了後のみ、検出OK or HOLD or デバウンス中は表示継続
       const hold=(now-lastDetMS)<HOLD_MS;
-      const wantShow = isArmed && (ok || hold);
+      const debouncing = (invalidCount>0 && invalidCount<INVALID_GRACE);
+      const wantShow = isArmed && (ok || hold || debouncing);
+      if(!wantShow && invalidCount>=INVALID_GRACE){ stableCount=0; } // 長く無効なら表示解除
+
       els.garment.style.display = wantShow ? 'block' : 'none';
       els.garment.style.opacity = wantShow ? '1' : '0';
 
