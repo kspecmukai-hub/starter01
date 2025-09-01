@@ -77,8 +77,8 @@
       <h2>設定</h2>
       <div class="row"><label>カメラ</label><button id="modeBtn" type="button" class="btn ghost" style="padding:8px 10px">イン（ミラーON）に起動中</button></div>
       <div class="row"><label>ミラー</label><input id="mirrorChk" type="checkbox" checked /></div>
-      <div class="row"><label>横位置（微調整）</label><input id="offX" type="range" min="-80" max="80" value="0" /></div>
-      <div class="row"><label>縦位置（微調整）</label><input id="offY" type="range" min="-120" max="120" value="0" /></div>
+      <div class="row"><label>横位置（微調整）</label><input id="offX" type="range" min="-80" max="80" value="14" /></div>
+      <div class="row"><label>縦位置（微調整）</label><input id="offY" type="range" min="-120" max="120" value="8" /></div>
       <div class="row"><label>プリセット</label><div id="presetInfo" class="mono">loading…</div></div>
       <div class="row"><button id="stopBtn" class="btn ghost">停止</button><button id="restartBtn" class="btn ghost">再起動</button></div>
     </div>
@@ -110,7 +110,7 @@
     };
 
     const ALPHA_POS=0.16, ALPHA_SCALE=0.12, HOLD_MS=600;
-    let ANCHOR_Y_FRAC=0.33, DROP_K=0.14;  // あなたの決定値を既定に
+    let ANCHOR_Y_FRAC=0.33, DROP_K=0.145;  // あなたの決定値を既定に
     const FIT_GAIN=1.0;
 
     let stream=null, facing='user', mirror=true;
