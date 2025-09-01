@@ -109,14 +109,19 @@
       restartBtn: document.getElementById('restartBtn'),
     };
 
-    const ALPHA_POS=0.16, ALPHA_SCALE=0.12, HOLD_MS=600;
+    // ■ 現行ベース + 明るさ追従
+    const ALPHA_POS=0.16, ALPHA_SCALE=0.12, ALPHA_BRIGHT=0.12, HOLD_MS=600;
     let ANCHOR_Y_FRAC=0.33, DROP_K=0.145;  // あなたの決定値を既定に
     const FIT_GAIN=1.0;
 
     let stream=null, facing='user', mirror=true;
     let landmarker=null, fileset=null;
-    let lastDetMS=0, smX=null, smY=null, smS=1;
+    let lastDetMS=0, smX=null, smY=null, smS=1, smB=1;
     let garmentNatW=0, garmentNatH=0, garmentConf=null, autoDropPx=0;
+
+    // 明るさサンプル用オフスクリーンCanvas
+    const _samp = document.createElement('canvas'); _samp.width=32; _samp.height=32;
+    const _sctx = _samp.getContext('2d', {willReadFrequently:true});
 
     const isMobile=/Android|iPhone|iPad|iPod/i.test(navigator.userAgent||'');
     if(!isMobile){ els.pcOnly.style.display='grid'; els.uaText.textContent=navigator.userAgent; }
@@ -168,16 +173,15 @@
       }catch(e){ console.warn('garments.json 読込失敗:', e); }
     }
 
-    // ここを強化：BOM除去＋先頭文字チェック＋エラーメッセージ詳細
+    // BOM除去＋厳密JSONパース＋UAマッチ
     async function loadPresets(){
       try{
         const r=await fetch('presets.json',{cache:'no-store'});
         if(!r.ok) throw new Error('HTTP '+r.status);
         let txt=await r.text();
-        txt=txt.replace(/^\uFEFF/,'').trim();            // ← BOM除去
+        txt=txt.replace(/^\uFEFF/,'').trim();
         if(!txt.startsWith('{')) throw new Error('not JSON (starts with "'+txt.slice(0,20).replace(/\s/g,' ')+'…")');
-        let cfg; try{ cfg=JSON.parse(txt); }             // ← 厳密JSON parse
-        catch(e){ throw new Error('JSON parse error'); }
+        let cfg; try{ cfg=JSON.parse(txt); } catch(e){ throw new Error('JSON parse error'); }
 
         const ua=navigator.userAgent||'';
         let anchor=cfg?.defaults?.anchorY ?? ANCHOR_Y_FRAC;
@@ -225,7 +229,8 @@
       smY=(smY==null)?cy:lerp(smY,cy,ALPHA_POS);
 
       const w=garmentNatW*smS, h=garmentNatH*smS;
-      const desiredY=smY+autoDropPx - ((1-smS) * updateGarmentTransform._shoulderPX * 0.08);
+      // 距離補正付き：k=0.13（近距離でやや下げ、遠距離でわずかに上げ）
+      const desiredY=smY+autoDropPx - ((1-smS) * updateGarmentTransform._shoulderPX * 0.13);
       const anchorOffset=(0.5-ANCHOR_Y_FRAC)*h;
 
       const offX=parseInt(els.offX.value,10)||0;
@@ -254,6 +259,29 @@
             autoDropPx=shoulderPX*DROP_K;
             updateGarmentTransform._cx=cx; updateGarmentTransform._cy=cy;
             lastDetMS=now; ok=true;
+
+            // === 明るさ計測（肩中心まわりのROI）＆反映 ===
+            try{
+              const vw=els.video.videoWidth, vh=els.video.videoHeight;
+              const cxN=(L.x+R.x)/2, cyN=(L.y+R.y)/2;
+              const wN=Math.min(Math.abs(R.x-L.x)*1.2, 0.6);
+              const hN=wN;
+              const sx=(cxN - wN/2)*vw;
+              const sy=(cyN - hN*0.65)*vh; // 顔〜襟寄り
+              const sw=wN*vw, sh=hN*vh;
+
+              _sctx.clearRect(0,0,32,32);
+              _sctx.drawImage(els.video, sx, sy, sw, sh, 0, 0, 32, 32);
+              const buf=_sctx.getImageData(0,0,32,32).data;
+              let acc=0;
+              for(let i=0;i<buf.length;i+=4){
+                acc += 0.2126*buf[i] + 0.7152*buf[i+1] + 0.0722*buf[i+2];
+              }
+              const mean=(acc/(32*32))/255;               // 0..1
+              const target=Math.max(0.78, Math.min(1.22, 1 + (mean-0.60)*0.70));
+              smB = (smB==null)?target : (smB + (target-smB)*ALPHA_BRIGHT);
+              els.garment.style.filter = `brightness(${smB.toFixed(3)})`;
+            }catch(_){}
           }
         }
       }catch(e){ console.warn('pose detect error:', e); }
