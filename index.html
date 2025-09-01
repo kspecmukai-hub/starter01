@@ -45,7 +45,7 @@
     #panel h2{ font-size:14px; margin:4px 0 8px; opacity:.95; }
     .row{ display:grid; grid-template-columns: 1fr 1fr; gap:8px; align-items:center; margin:8px 0; }
     .row > label{ font-size:12px; opacity:.95; text-shadow:0 1px 2px rgba(0,0,0,.4); }
-    input[type="range"], input[type="checkbox"]{ width:100%; }
+    input[type="range"], input[type="checkbox"], input[type="number"]{ width:100%; }
     .mono{ font:12px ui-monospace,monospace; opacity:.95; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 
     #toggle{
@@ -92,6 +92,13 @@
       <div class="row"><label>ミラー</label><input id="mirrorChk" type="checkbox" checked /></div>
       <div class="row"><label>横位置（微調整）</label><input id="offX" type="range" min="-80" max="80" value="10" /></div>
       <div class="row"><label>縦位置（微調整）</label><input id="offY" type="range" min="-120" max="120" value="10" /></div>
+
+      <!-- ★ 任意：肩幅(cm) 入力（?cal=1 のときだけ見える） -->
+      <div class="row cal-only" style="display:none">
+        <label>肩幅 (cm)</label>
+        <input id="userShoulder" type="number" min="20" max="80" step="0.5" placeholder="例 40" inputmode="decimal" />
+      </div>
+
       <div class="row"><button id="stopBtn" class="btn ghost">停止</button><button id="restartBtn" class="btn ghost">再起動</button></div>
     </div>
 
@@ -116,11 +123,12 @@
       mirrorChk: document.getElementById('mirrorChk'),
       offX: document.getElementById('offX'),
       offY: document.getElementById('offY'),
+      userShoulder: document.getElementById('userShoulder'),
       stopBtn: document.getElementById('stopBtn'),
       restartBtn: document.getElementById('restartBtn'),
     };
 
-    // ==== パラメータ ====
+    // ==== パラメータ（安全運転） ====
     const ALPHA_POS=0.16, ALPHA_SCALE=0.16, ALPHA_BRIGHT=0.35, HOLD_MS=900;
     let ANCHOR_Y_FRAC=0.33, DROP_K=0.147;
     const FIT_GAIN=1.0;
@@ -137,6 +145,11 @@
     let garmentNatW=0, garmentNatH=0, garmentConf=null, autoDropPx=0;
     let stableCount=0, isArmed=false, invalidCount=0;
 
+    // ★ 任意入力（肩幅cm）
+    const q = new URLSearchParams(location.search);
+    const CAL_MODE = q.get('cal') === '1';
+    let userShoulderCm = null; // 数値 or null
+
     // 明るさサンプル用
     const _samp = document.createElement('canvas'); _samp.width=32; _samp.height=32;
     const _sctx = _samp.getContext('2d', {willReadFrequently:true});
@@ -145,11 +158,28 @@
     if(!isMobile){
       els.pcOnly.style.display='grid';
       els.toggle.style.display='none';        // PCでは⚙非表示
-      els.startScreen.style.display='none';   // ★PCではスタートカードを隠す
+      els.startScreen.style.display='none';   // PCではスタートカード非表示
       // QR自動生成（現在のオリジン）
       const url = location.origin + '/';
       const qr = 'https://api.qrserver.com/v1/create-qr-code/?size=360x360&margin=20&data=' + encodeURIComponent(url);
       if (els.qrImg) els.qrImg.src = qr;
+    }
+
+    // CAL_MODE のときだけ入力UIを表示＋保存/復元
+    if (CAL_MODE) {
+      document.querySelectorAll('.cal-only').forEach(el=> el.style.display='grid');
+      const saved = localStorage.getItem('userShoulderCm');
+      if (saved) {
+        els.userShoulder.value = saved;
+        const v = parseFloat(saved);
+        userShoulderCm = Number.isFinite(v) && v>0 ? v : null;
+      }
+      els.userShoulder.addEventListener('input', (e)=>{
+        const v = parseFloat(e.target.value);
+        userShoulderCm = Number.isFinite(v) && v>0 ? v : null;
+        if (userShoulderCm) localStorage.setItem('userShoulderCm', String(userShoulderCm));
+        else localStorage.removeItem('userShoulderCm');
+      });
     }
 
     els.garment.addEventListener('load', ()=>{
@@ -221,10 +251,22 @@
       let s=1;
       if(updateGarmentTransform._shoulderPX){
         const pxHint=garmentConf.px_chest_hint||980;
-        let chestPx=updateGarmentTransform._shoulderPX;
-        if(garmentConf.chest_cm && garmentConf.shoulder_cm){
-          chestPx*= (garmentConf.chest_cm/garmentConf.shoulder_cm);
+
+        // === スケール決定の胸幅px（chestPx）を求める ===
+        let chestPx = updateGarmentTransform._shoulderPX; // フォールバック
+        if (userShoulderCm && userShoulderCm>0) {
+          // ユーザーの実測（cm）優先：px/cm を確定
+          const pxPerCm = updateGarmentTransform._shoulderPX / userShoulderCm;
+          if (garmentConf.chest_cm) {
+            chestPx = pxPerCm * garmentConf.chest_cm;
+          } else if (garmentConf.shoulder_cm) {
+            chestPx = pxPerCm * garmentConf.shoulder_cm;
+          } // どちらも無ければフォールバックのまま
+        } else if (garmentConf.chest_cm && garmentConf.shoulder_cm) {
+          // 従来推定：肩幅px から胸幅px に換算
+          chestPx = updateGarmentTransform._shoulderPX * (garmentConf.chest_cm / garmentConf.shoulder_cm);
         }
+        // px_chest_hint 比から最終スケール
         const autoS=(pxHint>0)?(chestPx/pxHint):1;
         s=lerp(1,autoS,FIT_GAIN);
       }
