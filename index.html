@@ -18,7 +18,7 @@
       will-change:left, top, width, opacity, filter;
     }
 
-    /* PCオーバーレイ（QR） */
+    /* PCオーバーレイ（QR自動生成） */
     #pcOnly{ position:absolute; inset:0; display:none; place-items:center; color:#fff; padding:24px; text-align:center; }
     #pcOnly .card{ background:transparent; padding:22px 24px; border-radius:16px; border:1px solid rgba(255,255,255,.25) }
     #pcOnly h1{ margin:0 0 10px; font-size:20px; }
@@ -64,7 +64,7 @@
     <video id="video" autoplay playsinline muted></video>
     <img id="garment" alt="garment" src="public/garments/trainer.png" />
 
-    <!-- PCアクセス時専用（QR自動生成） -->
+    <!-- PCアクセス時専用（QR自動生成／⚙非表示） -->
     <div id="pcOnly">
       <div class="card">
         <h1>スマホ専用です 📱</h1>
@@ -93,10 +93,10 @@
       <div class="row"><label>横位置（微調整）</label><input id="offX" type="range" min="-80" max="80" value="10" /></div>
       <div class="row"><label>縦位置（微調整）</label><input id="offY" type="range" min="-120" max="120" value="10" /></div>
 
-      <!-- ★ 任意：肩幅(cm) 入力（?cal=1 のときだけ見える） -->
-      <div class="row cal-only" style="display:none">
+      <!-- ▼ 任意：肩幅(cm)（?cal=1 で表示 / 保存済みなら自動表示・自動適用） -->
+      <div class="row" id="rowShoulderCm" style="display:none">
         <label>肩幅 (cm)</label>
-        <input id="userShoulder" type="number" min="20" max="80" step="0.5" placeholder="例 40" inputmode="decimal" />
+        <input id="shoulderCm" type="number" min="20" max="80" step="0.5" inputmode="decimal" placeholder="例: 45.0" />
       </div>
 
       <div class="row"><button id="stopBtn" class="btn ghost">停止</button><button id="restartBtn" class="btn ghost">再起動</button></div>
@@ -123,19 +123,21 @@
       mirrorChk: document.getElementById('mirrorChk'),
       offX: document.getElementById('offX'),
       offY: document.getElementById('offY'),
-      userShoulder: document.getElementById('userShoulder'),
+      rowShoulderCm: document.getElementById('rowShoulderCm'),
+      shoulderCm: document.getElementById('shoulderCm'),
       stopBtn: document.getElementById('stopBtn'),
       restartBtn: document.getElementById('restartBtn'),
     };
 
-    // ==== パラメータ（安全運転） ====
+    // ==== パラメータ ====
     const ALPHA_POS=0.16, ALPHA_SCALE=0.16, ALPHA_BRIGHT=0.35, HOLD_MS=900;
     let ANCHOR_Y_FRAC=0.33, DROP_K=0.147;
     const FIT_GAIN=1.0;
 
-    // 貼り付き根治：近距離上限到達→即非表示
+    // 貼り付き根治：
     const SHOULDER_MIN_FRAC=0.04;
-    const SHOULDER_MAX_FRAC=0.82;
+    const SHOULDER_MAX_FRAC=0.70;   // 近すぎ判定を早める
+    const MAX_W_FRAC=1.10;          // 見かけ幅がステージ幅の110%超えなら即NG
     const STABLE_ARM=3;
     const INVALID_GRACE=8;
 
@@ -145,42 +147,39 @@
     let garmentNatW=0, garmentNatH=0, garmentConf=null, autoDropPx=0;
     let stableCount=0, isArmed=false, invalidCount=0;
 
-    // ★ 任意入力（肩幅cm）
-    const q = new URLSearchParams(location.search);
-    const CAL_MODE = q.get('cal') === '1';
-    let userShoulderCm = null; // 数値 or null
-
-    // 明るさサンプル用
+    // 明るさサンプル
     const _samp = document.createElement('canvas'); _samp.width=32; _samp.height=32;
     const _sctx = _samp.getContext('2d', {willReadFrequently:true});
 
+    // ====== モード/クエリ ======
+    const q = new URLSearchParams(location.search);
+    const DEV_MODE = q.get('dev') === '1';
+    const CAL_MODE = q.get('cal') === '1';
+
+    // PC判定＆QR
     const isMobile=/Android|iPhone|iPad|iPod/i.test(navigator.userAgent||'');
-    if(!isMobile){
+    if(!isMobile && !DEV_MODE){
       els.pcOnly.style.display='grid';
-      els.toggle.style.display='none';        // PCでは⚙非表示
-      els.startScreen.style.display='none';   // PCではスタートカード非表示
-      // QR自動生成（現在のオリジン）
+      els.toggle.style.display='none';        // PCは⚙非表示
+      els.startScreen.style.display='none';   // PCは開始カード非表示
       const url = location.origin + '/';
       const qr = 'https://api.qrserver.com/v1/create-qr-code/?size=360x360&margin=20&data=' + encodeURIComponent(url);
       if (els.qrImg) els.qrImg.src = qr;
     }
 
-    // CAL_MODE のときだけ入力UIを表示＋保存/復元
-    if (CAL_MODE) {
-      document.querySelectorAll('.cal-only').forEach(el=> el.style.display='grid');
-      const saved = localStorage.getItem('userShoulderCm');
-      if (saved) {
-        els.userShoulder.value = saved;
-        const v = parseFloat(saved);
-        userShoulderCm = Number.isFinite(v) && v>0 ? v : null;
-      }
-      els.userShoulder.addEventListener('input', (e)=>{
-        const v = parseFloat(e.target.value);
-        userShoulderCm = Number.isFinite(v) && v>0 ? v : null;
-        if (userShoulderCm) localStorage.setItem('userShoulderCm', String(userShoulderCm));
-        else localStorage.removeItem('userShoulderCm');
-      });
+    // ====== 任意：肩幅cm 入力の表示制御 & 保存/復元 ======
+    const savedShoulder = parseFloat(localStorage.getItem('shoulderCm') || '');
+    if (!Number.isNaN(savedShoulder)) {
+      els.shoulderCm.value = String(savedShoulder);
     }
+    if (CAL_MODE || (!Number.isNaN(savedShoulder))) {
+      els.rowShoulderCm.style.display = 'grid';
+    }
+    els.shoulderCm.addEventListener('input', (e)=>{
+      const v = parseFloat(e.target.value);
+      if (!Number.isNaN(v) && v>0) localStorage.setItem('shoulderCm', String(v));
+      else localStorage.removeItem('shoulderCm');
+    });
 
     els.garment.addEventListener('load', ()=>{
       garmentNatW=els.garment.naturalWidth||els.garment.width||1000;
@@ -248,30 +247,35 @@
 
     function updateGarmentTransform(){
       if(garmentNatW===0||!garmentConf) return;
+
+      // --- スケール ---
       let s=1;
       if(updateGarmentTransform._shoulderPX){
         const pxHint=garmentConf.px_chest_hint||980;
 
-        // === スケール決定の胸幅px（chestPx）を求める ===
-        let chestPx = updateGarmentTransform._shoulderPX; // フォールバック
-        if (userShoulderCm && userShoulderCm>0) {
-          // ユーザーの実測（cm）優先：px/cm を確定
-          const pxPerCm = updateGarmentTransform._shoulderPX / userShoulderCm;
+        // ユーザー肩幅cmがあれば優先
+        const userCm = parseFloat(localStorage.getItem('shoulderCm') || els.shoulderCm?.value || '');
+        let chestPx = null;
+        if(!Number.isNaN(userCm) && userCm>0){
+          const pxPerCm = updateGarmentTransform._shoulderPX / userCm;
           if (garmentConf.chest_cm) {
             chestPx = pxPerCm * garmentConf.chest_cm;
-          } else if (garmentConf.shoulder_cm) {
-            chestPx = pxPerCm * garmentConf.shoulder_cm;
-          } // どちらも無ければフォールバックのまま
-        } else if (garmentConf.chest_cm && garmentConf.shoulder_cm) {
-          // 従来推定：肩幅px から胸幅px に換算
-          chestPx = updateGarmentTransform._shoulderPX * (garmentConf.chest_cm / garmentConf.shoulder_cm);
+          }
         }
-        // px_chest_hint 比から最終スケール
+        // Fallback：肩/胸 比
+        if (chestPx==null){
+          chestPx = updateGarmentTransform._shoulderPX;
+          if(garmentConf.chest_cm && garmentConf.shoulder_cm){
+            chestPx *= (garmentConf.chest_cm/garmentConf.shoulder_cm);
+          }
+        }
+
         const autoS=(pxHint>0)?(chestPx/pxHint):1;
         s=lerp(1,autoS,FIT_GAIN);
       }
       smS=(smS==null)?s:lerp(smS,s,ALPHA_SCALE);
 
+      // --- 位置 ---
       const W=els.stage.clientWidth, H=els.stage.clientHeight;
       const cx=updateGarmentTransform._cx ?? (W/2);
       const cy=updateGarmentTransform._cy ?? (H/2);
@@ -279,7 +283,7 @@
       smY=(smY==null)?cy:lerp(smY,cy,ALPHA_POS);
 
       const w=garmentNatW*smS, h=garmentNatH*smS;
-      const desiredY=smY+autoDropPx - ((1-smS) * updateGarmentTransform._shoulderPX * 0.13);
+      const desiredY=smY+autoDropPx - ((1-smS) * (updateGarmentTransform._shoulderPX||0) * 0.13);
       const anchorOffset=(0.5-ANCHOR_Y_FRAC)*h;
 
       const offX=parseInt(els.offX.value,10)||0;
@@ -293,8 +297,7 @@
     async function tick(){
       if(!landmarker||!els.video||!els.video.videoWidth){ requestAnimationFrame(tick); return; }
       const W=els.stage.clientWidth, H=els.stage.clientHeight;
-      const now=performance.now(); let ok=false, valid=false;
-      let tooClose=false;
+      const now=performance.now(); let ok=false, valid=false; let tooClose=false;
 
       try{
         const result=landmarker.detectForVideo(els.video,now);
@@ -307,22 +310,32 @@
             const shoulderPX=Math.abs(R.x-L.x)*W;
             const shoulderFrac=shoulderPX/Math.max(1,W);
 
-            // 肩幅pxを常に少しずつ更新（貼り付き防止）
-            const pxSmooth = updateGarmentTransform._shoulderPX;
+            // 肩幅pxのスムージング（上限を少し抑制）
+            const prevPX = updateGarmentTransform._shoulderPX;
             const shoulderPXc = Math.min(shoulderPX, W*0.92);
-            updateGarmentTransform._shoulderPX = (pxSmooth==null)
+            updateGarmentTransform._shoulderPX = (prevPX==null)
               ? shoulderPXc
-              : pxSmooth + (shoulderPXc - pxSmooth) * 0.35;
-            autoDropPx = updateGarmentTransform._shoulderPX * DROP_K;
+              : prevPX + (shoulderPXc - prevPX) * 0.35;
+
+            autoDropPx = (updateGarmentTransform._shoulderPX||0) * DROP_K;
             updateGarmentTransform._cx=cx;
             updateGarmentTransform._cy=cy;
 
-            // 有効判定＋近距離即非表示
+            // 有効/近すぎ判定
             tooClose = (shoulderFrac >= SHOULDER_MAX_FRAC);
             valid = (shoulderFrac>SHOULDER_MIN_FRAC && shoulderFrac<SHOULDER_MAX_FRAC);
 
+            // 近すぎは即時リセット（HOLD無効）
+            if (tooClose) {
+              isArmed = false;
+              stableCount = 0;
+              invalidCount = INVALID_GRACE;
+              smS = 1;
+              updateGarmentTransform._shoulderPX = null;
+            }
+
             if(valid){
-              // 明るさ計測
+              // 明るさ
               try{
                 const vw=els.video.videoWidth, vh=els.video.videoHeight;
                 const cxN=(L.x+R.x)/2, cyN=(L.y+R.y)/2;
@@ -355,6 +368,12 @@
           }
         }
       }catch(e){ console.warn('pose detect error:', e); }
+
+      // 見かけ幅でも早期NG（保険）
+      const predW = garmentNatW * (smS || 1);
+      if (predW > W * MAX_W_FRAC) {
+        tooClose = true;
+      }
 
       // 近距離はHOLD/デバウンス無効化＝即非表示
       const hold = ((now - lastDetMS) < HOLD_MS) && !tooClose;
@@ -392,8 +411,8 @@
     (async ()=>{
       els.mirrorChk.checked=mirror;
       els.modeBtn.textContent='インカメラ起動中';
-      await loadPresets();
-      await loadGarmentConfig();
+      await loadPresets();       // 内部適用のみ
+      await loadGarmentConfig(); // 服寸法ヒント
     })();
   </script>
 </body>
