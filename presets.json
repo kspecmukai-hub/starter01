@@ -4,14 +4,17 @@
     "dropK": 0.14,
     "xBiasFrac": 0.00,
     "yBiasFrac": 0.00,
-    "yCompFrac": 0.00,   // ← 新規: スケール差に対する縦補正（画面高に対する比）
-    "scaleRef": 1.00     // ← 新規: 補正の基準スケール（= px_chest_hint と一致で1.0）
+    "yCompFrac": 0.00,
+    "scaleRef": 1.00
   },
   "models": [
-    { "match": "iPhone",
-      "anchorY": 0.335, "dropK": 0.14,
-      "xBiasFrac": 0.02, "yBiasFrac": 0.012,
-      "yCompFrac": 0.075,  // ★まずは 0.075 前後から
+    {
+      "match": "iPhone",
+      "anchorY": 0.335,
+      "dropK": 0.14,
+      "xBiasFrac": 0.02,
+      "yBiasFrac": 0.012,
+      "yCompFrac": 0.075,
       "scaleRef": 1.00
     }
   ]
