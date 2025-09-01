@@ -1,4 +1,13 @@
 {
-  "defaults": { "anchorY": 0.33, "dropK": 0.14 },
-  "models": []
+  "defaults": {
+    "anchorY": 0.33,
+    "dropK": 0.14,
+    "xBiasFrac": 0.00,
+    "yBiasFrac": 0.00
+  },
+  "models": [
+    { "match": "iPhone",      "anchorY": 0.335, "dropK": 0.14,  "xBiasFrac": 0.02,  "yBiasFrac": 0.012 },
+    { "match": "Pixel",       "anchorY": 0.34,  "dropK": 0.145, "xBiasFrac": 0.018, "yBiasFrac": 0.012 },
+    { "match": "SM-|Galaxy",  "anchorY": 0.335, "dropK": 0.145, "xBiasFrac": 0.018, "yBiasFrac": 0.012 }
+  ]
 }
