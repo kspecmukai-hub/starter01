@@ -18,17 +18,19 @@
       will-change:left, top, width, opacity, filter;
     }
 
-    /* PC専用オーバーレイ（QR表示付き） */
+    /* PCオーバーレイ（QR付・設定ボタンは非表示） */
     #pcOnly{ position:absolute; inset:0; display:none; place-items:center; color:#fff; padding:24px; text-align:center; }
     #pcOnly .card{ background:transparent; padding:22px 24px; border-radius:16px; border:1px solid rgba(255,255,255,.25) }
     #pcOnly h1{ margin:0 0 10px; font-size:20px; }
     #pcOnly p{ margin:8px 0; opacity:.95; line-height:1.6; }
     #pcOnly .qr{ width:240px; max-width:60vw; margin:14px auto 6px; display:block; background:#fff; padding:10px; border-radius:10px; }
 
+    /* スタートカード：文言は左寄せ、ボタンは中央 */
     #startScreen{ position:absolute; inset:0; display:grid; place-items:center; background:rgba(0,0,0,.45); }
     #startCard{ background:transparent; color:#fff; padding:24px 28px; border-radius:16px; border:1px solid rgba(255,255,255,.25) }
     #startCard h1{ margin:0 0 10px; font-size:22px; }
-    #startCard p{ margin:10px 0 14px; line-height:1.7; opacity:.95; }
+    #startCard p{ margin:10px 0 14px; line-height:1.7; opacity:.95; text-align:left; }
+    #startBtn{ display:block; margin:12px auto 0; }  /* ← 中央寄せ */
 
     .btn{ appearance:none; border:0; border-radius:10px; padding:12px 16px; font-weight:700; cursor:pointer; }
     .btn.primary{ background:var(--ui-accent); color:#053; }
@@ -62,7 +64,6 @@
     <video id="video" autoplay playsinline muted></video>
     <img id="garment" alt="garment" src="public/garments/trainer.png" />
 
-    <!-- PCアクセス時専用オーバーレイ（文言変更＋QR） -->
     <div id="pcOnly">
       <div class="card">
         <h1>スマホ専用です 📱</h1>
@@ -117,16 +118,14 @@
       restartBtn: document.getElementById('restartBtn'),
     };
 
-    // ==== 現行ベース（安全運転：基礎値据え置き） ====
-    // 追従をやや速め（ALPHA_SCALE 0.16）
+    // ==== パラメータ（安全運転） ====
     const ALPHA_POS=0.16, ALPHA_SCALE=0.16, ALPHA_BRIGHT=0.35, HOLD_MS=900;
     let ANCHOR_Y_FRAC=0.33, DROP_K=0.147;
     const FIT_GAIN=1.0;
 
-    // 距離しきい値：近距離を広げ、極近距離は即非表示
+    // 近距離を広げ、上限到達＝即非表示（貼り付き根治）
     const SHOULDER_MIN_FRAC=0.04;
-    const SHOULDER_MAX_FRAC=0.80;   // 0.72→0.80（近距離でも有効を維持）
-    const TOO_CLOSE_FRAC=0.90;      // 極近距離は貼り付き防止で即非表示
+    const SHOULDER_MAX_FRAC=0.82;  // 0.82以上は tooClose 扱い
     const STABLE_ARM=3;
     const INVALID_GRACE=8;
 
@@ -136,15 +135,14 @@
     let garmentNatW=0, garmentNatH=0, garmentConf=null, autoDropPx=0;
     let stableCount=0, isArmed=false, invalidCount=0;
 
-    // 明るさサンプル用オフスクリーンCanvas
+    // 明るさサンプル用Canvas
     const _samp = document.createElement('canvas'); _samp.width=32; _samp.height=32;
     const _sctx = _samp.getContext('2d', {willReadFrequently:true});
 
     const isMobile=/Android|iPhone|iPad|iPod/i.test(navigator.userAgent||'');
     if(!isMobile){
       els.pcOnly.style.display='grid';
-      // PCでは設定ボタンを非表示（仕様）
-      els.toggle.style.display='none';
+      els.toggle.style.display='none'; // PCで⚙非表示
     }
 
     els.garment.addEventListener('load', ()=>{
@@ -200,7 +198,6 @@
       }catch(e){ console.warn('garments.json 読込失敗:', e); }
     }
 
-    // presets.json 読み込み（UI表示なし・内部適用のみ）
     async function loadPresets(){
       try{
         const r=await fetch('presets.json',{cache:'no-store'});
@@ -209,9 +206,7 @@
         txt=txt.replace(/^\uFEFF/,'').trim();
         if(!txt.startsWith('{')) throw new Error('not JSON (starts with "'+txt.slice(0,20).replace(/\s/g,' ')+'…")');
         JSON.parse(txt);
-      }catch(e){
-        console.warn('presets.json 読込失敗:', e);
-      }
+      }catch(e){ console.warn('presets.json 読込失敗:', e); }
     }
 
     function updateGarmentTransform(){
@@ -250,7 +245,7 @@
       if(!landmarker||!els.video||!els.video.videoWidth){ requestAnimationFrame(tick); return; }
       const W=els.stage.clientWidth, H=els.stage.clientHeight;
       const now=performance.now(); let ok=false, valid=false;
-      let tooClose=false; // ★極近距離フラグ（フレーム最後でも参照）
+      let tooClose=false;
 
       try{
         const result=landmarker.detectForVideo(els.video,now);
@@ -263,22 +258,22 @@
             const shoulderPX=Math.abs(R.x-L.x)*W;
             const shoulderFrac=shoulderPX/Math.max(1,W);
 
-            // ★ 常に少しずつ肩幅・位置を更新（貼り付き防止の肝）
+            // 常に少しずつ更新（貼り付き防止の肝）
             const pxSmooth = updateGarmentTransform._shoulderPX;
-            const shoulderPXc = Math.min(shoulderPX, W*0.92); // 安全上限
+            const shoulderPXc = Math.min(shoulderPX, W*0.92);
             updateGarmentTransform._shoulderPX = (pxSmooth==null)
               ? shoulderPXc
-              : pxSmooth + (shoulderPXc - pxSmooth) * 0.35; // ゆるスムージング
+              : pxSmooth + (shoulderPXc - pxSmooth) * 0.35;
             autoDropPx = updateGarmentTransform._shoulderPX * DROP_K;
             updateGarmentTransform._cx=cx; 
             updateGarmentTransform._cy=cy;
 
-            // 有効判定＋極近距離判定
-            tooClose = (shoulderFrac >= TOO_CLOSE_FRAC);
+            // 有効判定＋近距離即非表示
+            tooClose = (shoulderFrac >= SHOULDER_MAX_FRAC); // 上限到達→即非表示
             valid = (shoulderFrac>SHOULDER_MIN_FRAC && shoulderFrac<SHOULDER_MAX_FRAC);
 
             if(valid){
-              // 明るさ計測（従来どおり）
+              // 明るさ計測
               try{
                 const vw=els.video.videoWidth, vh=els.video.videoHeight;
                 const cxN=(L.x+R.x)/2, cyN=(L.y+R.y)/2;
@@ -312,9 +307,9 @@
         }
       }catch(e){ console.warn('pose detect error:', e); }
 
-      // ★ 極近距離のときは即非表示（HOLDやデバウンスも無効化）
-      const hold=((now-lastDetMS)<HOLD_MS) && !tooClose;
-      const debouncing=(invalidCount>0 && invalidCount<INVALID_GRACE) && !tooClose;
+      // 近距離時はHOLD/デバウンス無効化＝即非表示
+      const hold = ((now - lastDetMS) < HOLD_MS) && !tooClose;
+      const debouncing = (invalidCount>0 && invalidCount<INVALID_GRACE) && !tooClose;
       const wantShow = isArmed && !tooClose && (ok || hold || debouncing);
       if(!wantShow && invalidCount>=INVALID_GRACE){ stableCount=0; }
 
