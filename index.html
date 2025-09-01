@@ -18,7 +18,7 @@
       will-change:left, top, width, opacity, filter;
     }
 
-    /* PCオーバーレイ（QR付・PCでは⚙非表示） */
+    /* PCオーバーレイ（QR） */
     #pcOnly{ position:absolute; inset:0; display:none; place-items:center; color:#fff; padding:24px; text-align:center; }
     #pcOnly .card{ background:transparent; padding:22px 24px; border-radius:16px; border:1px solid rgba(255,255,255,.25) }
     #pcOnly h1{ margin:0 0 10px; font-size:20px; }
@@ -30,7 +30,7 @@
     #startCard{ background:transparent; color:#fff; padding:24px 28px; border-radius:16px; border:1px solid rgba(255,255,255,.25) }
     #startCard h1{ margin:0 0 10px; font-size:22px; }
     #startCard p{ margin:10px 0 14px; line-height:1.7; opacity:.95; text-align:left; }
-    #startBtn{ display:block; margin:12px auto 0; }  /* ボタン中央寄せ */
+    #startBtn{ display:block; margin:12px auto 0; }  /* ボタン中央 */
 
     .btn{ appearance:none; border:0; border-radius:10px; padding:12px 16px; font-weight:700; cursor:pointer; }
     .btn.primary{ background:var(--ui-accent); color:#053; }
@@ -64,7 +64,7 @@
     <video id="video" autoplay playsinline muted></video>
     <img id="garment" alt="garment" src="public/garments/trainer.png" />
 
-    <!-- PCアクセス時専用オーバーレイ（文言変更＋QRは自動生成） -->
+    <!-- PCアクセス時専用（QR自動生成） -->
     <div id="pcOnly">
       <div class="card">
         <h1>スマホ専用です 📱</h1>
@@ -120,14 +120,14 @@
       restartBtn: document.getElementById('restartBtn'),
     };
 
-    // ==== パラメータ（安全運転） ====
+    // ==== パラメータ ====
     const ALPHA_POS=0.16, ALPHA_SCALE=0.16, ALPHA_BRIGHT=0.35, HOLD_MS=900;
     let ANCHOR_Y_FRAC=0.33, DROP_K=0.147;
     const FIT_GAIN=1.0;
 
     // 貼り付き根治：近距離上限到達→即非表示
     const SHOULDER_MIN_FRAC=0.04;
-    const SHOULDER_MAX_FRAC=0.82;  // 0.82以上は tooClose 扱い
+    const SHOULDER_MAX_FRAC=0.82;
     const STABLE_ARM=3;
     const INVALID_GRACE=8;
 
@@ -137,15 +137,16 @@
     let garmentNatW=0, garmentNatH=0, garmentConf=null, autoDropPx=0;
     let stableCount=0, isArmed=false, invalidCount=0;
 
-    // 明るさサンプル用Canvas
+    // 明るさサンプル用
     const _samp = document.createElement('canvas'); _samp.width=32; _samp.height=32;
     const _sctx = _samp.getContext('2d', {willReadFrequently:true});
 
     const isMobile=/Android|iPhone|iPad|iPod/i.test(navigator.userAgent||'');
     if(!isMobile){
       els.pcOnly.style.display='grid';
-      els.toggle.style.display='none'; // PCで⚙非表示
-      // ★ QRコードを現在のオリジンから自動生成（外部画像APIを1枚ロード）
+      els.toggle.style.display='none';        // PCでは⚙非表示
+      els.startScreen.style.display='none';   // ★PCではスタートカードを隠す
+      // QR自動生成（現在のオリジン）
       const url = location.origin + '/';
       const qr = 'https://api.qrserver.com/v1/create-qr-code/?size=360x360&margin=20&data=' + encodeURIComponent(url);
       if (els.qrImg) els.qrImg.src = qr;
@@ -264,18 +265,18 @@
             const shoulderPX=Math.abs(R.x-L.x)*W;
             const shoulderFrac=shoulderPX/Math.max(1,W);
 
-            // 常に少しずつ更新（貼り付き防止の肝）
+            // 肩幅pxを常に少しずつ更新（貼り付き防止）
             const pxSmooth = updateGarmentTransform._shoulderPX;
             const shoulderPXc = Math.min(shoulderPX, W*0.92);
             updateGarmentTransform._shoulderPX = (pxSmooth==null)
               ? shoulderPXc
               : pxSmooth + (shoulderPXc - pxSmooth) * 0.35;
             autoDropPx = updateGarmentTransform._shoulderPX * DROP_K;
-            updateGarmentTransform._cx=cx; 
+            updateGarmentTransform._cx=cx;
             updateGarmentTransform._cy=cy;
 
             // 有効判定＋近距離即非表示
-            tooClose = (shoulderFrac >= SHOULDER_MAX_FRAC); // 上限到達→即非表示
+            tooClose = (shoulderFrac >= SHOULDER_MAX_FRAC);
             valid = (shoulderFrac>SHOULDER_MIN_FRAC && shoulderFrac<SHOULDER_MAX_FRAC);
 
             if(valid){
@@ -313,7 +314,7 @@
         }
       }catch(e){ console.warn('pose detect error:', e); }
 
-      // 近距離時はHOLD/デバウンス無効化＝即非表示
+      // 近距離はHOLD/デバウンス無効化＝即非表示
       const hold = ((now - lastDetMS) < HOLD_MS) && !tooClose;
       const debouncing = (invalidCount>0 && invalidCount<INVALID_GRACE) && !tooClose;
       const wantShow = isArmed && !tooClose && (ok || hold || debouncing);
@@ -349,8 +350,8 @@
     (async ()=>{
       els.mirrorChk.checked=mirror;
       els.modeBtn.textContent='インカメラ起動中';
-      await loadPresets();       // 内部適用のみ
-      await loadGarmentConfig(); // 服寸法ヒント
+      await loadPresets();
+      await loadGarmentConfig();
     })();
   </script>
 </body>
