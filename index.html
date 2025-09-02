@@ -45,7 +45,7 @@
     #panel h2{ font-size:14px; margin:4px 0 8px; opacity:.95; }
     .row{ display:grid; grid-template-columns: 1fr 1fr; gap:8px; align-items:center; margin:8px 0; }
     .row > label{ font-size:12px; opacity:.95; text-shadow:0 1px 2px rgba(0,0,0,.4); }
-    input[type="range"], input[type="checkbox"]{ width:100%; }
+    input[type="range"], input[type="checkbox"], input[type="number"]{ width:100%; }
     .mono{ font:12px ui-monospace,monospace; opacity:.95; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 
     #toggle{
@@ -54,7 +54,7 @@
       box-shadow:0 6px 24px rgba(0,0,0,.35);
     }
 
-    /* ▼B: 近/遠ガイド（アーム前のみ表示） */
+    /* ▼距離ガイド（アーム前のみ表示） */
     #proxHint{
       position:absolute; left:50%; bottom:18%; transform:translateX(-50%);
       background:rgba(0,0,0,.55); border:1px solid rgba(255,255,255,.25);
@@ -105,10 +105,17 @@
       <div class="row"><label>ミラー</label><input id="mirrorChk" type="checkbox" checked /></div>
       <div class="row"><label>横位置（微調整）</label><input id="offX" type="range" min="-80" max="80" value="10" /></div>
       <div class="row"><label>縦位置（微調整）</label><input id="offY" type="range" min="-120" max="120" value="10" /></div>
+
+      <!-- 追加：肩幅（cm） ※任意／常時表示。未入力なら現行挙動のまま -->
+      <div class="row">
+        <label>肩幅（cm）※任意</label>
+        <input id="userShoulderCm" type="number" inputmode="decimal" min="30" max="70" step="0.5" placeholder="未入力" />
+      </div>
+
       <div class="row"><button id="stopBtn" class="btn ghost">停止</button><button id="restartBtn" class="btn ghost">再起動</button></div>
     </div>
 
-    <!-- ▼B: 近/遠ガイド（アーム前のみ） -->
+    <!-- 距離ガイド（アーム前のみ） -->
     <div id="proxHint" aria-live="polite" role="status"></div>
 
     <button id="toggle" title="設定">⚙</button>
@@ -132,9 +139,10 @@
       mirrorChk: document.getElementById('mirrorChk'),
       offX: document.getElementById('offX'),
       offY: document.getElementById('offY'),
+      userShoulderCm: document.getElementById('userShoulderCm'),
       stopBtn: document.getElementById('stopBtn'),
       restartBtn: document.getElementById('restartBtn'),
-      proxHint: document.getElementById('proxHint'), // ▼B
+      proxHint: document.getElementById('proxHint'),
     };
 
     // ==== パラメータ（据え置き） ====
@@ -154,7 +162,28 @@
     let garmentNatW=0, garmentNatH=0, garmentConf=null, autoDropPx=0;
     let stableCount=0, isArmed=false, invalidCount=0;
 
-    // ▼B: アーム前ガイド用の閾値（検出本体とは独立）
+    // 肩幅(cm) 任意入力（保存/復元）
+    let userCm = null;
+    (()=>{
+      const saved = parseFloat(localStorage.getItem('userShoulderCm')||'');
+      if (Number.isFinite(saved)) {
+        userCm = saved;
+        els.userShoulderCm.value = String(saved);
+      }
+      els.userShoulderCm.addEventListener('change', ()=>{
+        const v = parseFloat(els.userShoulderCm.value);
+        if (Number.isFinite(v) && v>=30 && v<=70) {
+          userCm = v;
+          localStorage.setItem('userShoulderCm', String(v));
+        } else {
+          userCm = null;
+          localStorage.removeItem('userShoulderCm');
+          els.userShoulderCm.value = '';
+        }
+      });
+    })();
+
+    // 距離ガイド（アーム前だけ）
     let startStable=0;
     const START_MIN_FRAC=0.06, START_MAX_FRAC=0.76, START_ARM=3;
     function showProx(msg){ if(!els.proxHint) return; els.proxHint.textContent=msg||''; els.proxHint.style.display=msg?'block':'none'; }
@@ -194,7 +223,7 @@
         // 状態リセット
         smX=null; smY=null; smS=1; smB=1;
         stableCount=0; isArmed=false; invalidCount=0;
-        startStable=0; showProx(''); // ▼B: 開始時は非表示
+        startStable=0; showProx('');
         lastDetMS=0;
         els.garment.style.display='none';
         els.garment.style.opacity='0';
@@ -239,20 +268,36 @@
       }catch(e){ console.warn('presets.json 読込失敗:', e); }
     }
 
+    // --- スケール/位置適用（A:既定, B:ユーザーcm）---
     function updateGarmentTransform(){
       if(garmentNatW===0||!garmentConf) return;
-      let s=1;
-      if(updateGarmentTransform._shoulderPX){
-        const pxHint=garmentConf.px_chest_hint||980;
-        let chestPx=updateGarmentTransform._shoulderPX;
-        if(garmentConf.chest_cm && garmentConf.shoulder_cm){
-          chestPx*= (garmentConf.chest_cm/garmentConf.shoulder_cm);
-        }
-        const autoS=(pxHint>0)?(chestPx/pxHint):1;
-        s=lerp(1,autoS,FIT_GAIN);
-      }
-      smS=(smS==null)?s:lerp(smS,s,ALPHA_SCALE);
 
+      const shoulderPX = updateGarmentTransform._shoulderPX || 0;
+
+      // A) 既定スケール（従来ロジック）
+      let sDefault = 1;
+      if (shoulderPX > 0) {
+        const pxHint = garmentConf.px_chest_hint || 980;
+        let chestPxA = shoulderPX;
+        if (garmentConf.chest_cm && garmentConf.shoulder_cm) {
+          chestPxA *= (garmentConf.chest_cm / garmentConf.shoulder_cm);
+        }
+        sDefault = (pxHint > 0) ? (chestPxA / pxHint) : 1;
+      }
+
+      // B) ユーザーcmスケール（任意）…あれば上書き。※Y補正には使わない
+      let sManual = null;
+      if (shoulderPX > 0 && userCm != null && garmentConf.chest_cm) {
+        const pxHint = garmentConf.px_chest_hint || 980;
+        const pxPerCm = shoulderPX / Math.max(1e-6, userCm);
+        const chestPxB = pxPerCm * garmentConf.chest_cm;
+        sManual = (pxHint > 0) ? (chestPxB / pxHint) : null;
+      }
+
+      const sTarget = (sManual != null) ? sManual : sDefault;
+      smS = (smS==null) ? sTarget : lerp(smS, sTarget, ALPHA_SCALE);
+
+      // 位置：AスケールでY補正を固定（上下の見た目を据え置き）
       const W=els.stage.clientWidth, H=els.stage.clientHeight;
       const cx=updateGarmentTransform._cx ?? (W/2);
       const cy=updateGarmentTransform._cy ?? (H/2);
@@ -260,8 +305,8 @@
       smY=(smY==null)?cy:lerp(smY,cy,ALPHA_POS);
 
       const w=garmentNatW*smS, h=garmentNatH*smS;
-      const shoulderPX = updateGarmentTransform._shoulderPX || 0; // 安全フォールバック
-      const desiredY=smY+autoDropPx - ((1-smS) * shoulderPX * 0.13);
+      const sForY = sDefault; // ← Y補正は既定
+      const desiredY=smY + autoDropPx - ((1 - sForY) * shoulderPX * 0.13);
       const anchorOffset=(0.5-ANCHOR_Y_FRAC)*h;
 
       const offX=parseInt(els.offX.value,10)||0;
@@ -289,7 +334,7 @@
             const shoulderPX=Math.abs(R.x-L.x)*W;
             const shoulderFrac=shoulderPX/Math.max(1,W);
 
-            // ▼B: アーム前の距離ガイド（本体判定とは独立）
+            // アーム前ガイド（本体判定とは独立）
             if(!isArmed){
               const inStartRange = (shoulderFrac > START_MIN_FRAC && shoulderFrac < START_MAX_FRAC);
               if(inStartRange){
@@ -303,14 +348,14 @@
               }
             }
 
-            // 肩幅pxのスムージング（据え置き）
+            // 肩幅pxスムージング（据え置き）
             const pxSmooth = updateGarmentTransform._shoulderPX;
             const shoulderPXc = Math.min(shoulderPX, W*0.92);
             updateGarmentTransform._shoulderPX = (pxSmooth==null)
               ? shoulderPXc
               : pxSmooth + (shoulderPXc - pxSmooth) * 0.35;
 
-            autoDropPx = updateGarmentTransform._shoulderPX * DROP_K;
+            autoDropPx = (updateGarmentTransform._shoulderPX||0) * DROP_K;
             updateGarmentTransform._cx=cx;
             updateGarmentTransform._cy=cy;
 
@@ -347,7 +392,7 @@
               invalidCount = 0;
               if(stableCount>=STABLE_ARM){
                 isArmed=true; ok=true; lastDetMS=now;
-                showProx(''); // ▼B: アームしたらヒント消去
+                showProx(''); // アームしたらヒント消す
               }
             }else{
               if(isArmed){ invalidCount = Math.min(INVALID_GRACE, invalidCount+1); }
