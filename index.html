@@ -220,14 +220,36 @@
         await els.video.play().catch(()=>{});
         els.startScreen.style.display='none';
         applyMirror();
-        // 状態リセット
+        // === Safari初期フレーム保護 ===
+async function waitForVideoReady(){
+  for(let i=0;i<30;i++){  // 約0.5秒以内
+    if(els.video.readyState>=2 && els.video.videoWidth>0) return true;
+    await sleep(16);
+  }
+  console.warn('video not ready (timeout)');
+  return false;
+}
+             // 状態リセット
         smX=null; smY=null; smS=1; smB=1;
         stableCount=0; isArmed=false; invalidCount=0;
         startStable=0; showProx('');
         lastDetMS=0;
         els.garment.style.display='none';
         els.garment.style.opacity='0';
+
+        // === Safari初期フレーム保護 ===
+        async function waitForVideoReady(){
+          for(let i=0;i<30;i++){  // 約0.5秒以内で待機
+            if(els.video.readyState>=2 && els.video.videoWidth>0) return true;
+            await sleep(16);
+          }
+          console.warn('video not ready (timeout)');
+          return false;
+        }
+
         if(!landmarker){ await initPose(); }
+        // Safari: 映像準備が完了してからtick開始
+        await waitForVideoReady();
         requestAnimationFrame(tick);
       }catch(err){
         console.error('startCamera error:', err);
