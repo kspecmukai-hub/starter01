@@ -12,7 +12,7 @@
     "image": "public/garments/lacy-blouse.png",
     "chest_cm": 58,
     "shoulder_cm": 80,
-    "px_chest_hint": 680,
+    "px_chest_hint": 420,
     "anchorY": 0.33
   }
 }
