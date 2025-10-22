@@ -249,12 +249,23 @@
 
     async function loadGarmentConfig(){
       try{
-        const r=await fetch('garments.json',{cache:'no-store'});
-        if(!r.ok) throw new Error('HTTP '+r.status);
-        const data=await r.json();
-        const firstKey=Object.keys(data)[0];
-        garmentConf=data[firstKey]||null;
-      }catch(e){ console.warn('garments.json 読込失敗:', e); }
+        const r = await fetch('garments.json', { cache: 'no-store' });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const data = await r.json();
+
+        // URLの ?item=〇〇 を取得して選択
+        const params = new URLSearchParams(window.location.search);
+        const key = params.get('item') || Object.keys(data)[0];
+
+        garmentConf = data[key] || data[Object.keys(data)[0]] || null;
+
+        // 対応画像を設定
+        if (garmentConf && garmentConf.image) {
+          els.garment.src = garmentConf.image;
+        }
+      } catch (e) {
+        console.warn('garments.json 読込失敗:', e);
+      }
     }
 
     async function loadPresets(){
