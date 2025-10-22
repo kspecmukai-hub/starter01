@@ -11,8 +11,8 @@
     "name": "レースヨークブラウス",
     "image": "public/garments/lacy-blouse.png",
     "chest_cm": 58,
-    "shoulder_cm": 50,
-    "px_chest_hint": 980,
+    "shoulder_cm": 80,
+    "px_chest_hint": 680,
     "anchorY": 0.33
   }
 }
