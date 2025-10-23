@@ -318,7 +318,8 @@
       const w=garmentNatW*smS, h=garmentNatH*smS;
       const sForY = sDefault; // ← Y補正は既定
       const desiredY=smY + autoDropPx - ((1 - sForY) * shoulderPX * 0.13);
-      const anchorOffset=(0.5-ANCHOR_Y_FRAC)*h;
+      const anchorFrac = (garmentConf.anchorY ?? ANCHOR_Y_FRAC);
+      const anchorOffset = (0.5 - anchorFrac) * h;
 
       const offX=parseInt(els.offX.value,10)||0;
       const offY=parseInt(els.offY.value,10)||0;
