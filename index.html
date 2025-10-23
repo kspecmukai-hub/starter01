@@ -279,12 +279,6 @@
       }catch(e){ console.warn('presets.json 読込失敗:', e); }
     }
 
-    // --- スケール/位置適用（A:既定, B:ユーザーcm）---
-    function updateGarmentTransform(){
-      if(garmentNatW===0||!garmentConf) return;
-
-      const shoulderPX = updateGarmentTransform._shoulderPX || 0;
-
     // --- スケール/位置適用（A:画像肩幅px基準, B:ユーザーcm上書き）---
 function updateGarmentTransform(){
   if (garmentNatW===0 || !garmentConf) return;
