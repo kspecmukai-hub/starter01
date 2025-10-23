@@ -421,10 +421,18 @@
       els.garment.style.display = wantShow ? 'block' : 'none';
       els.garment.style.opacity = wantShow ? '1' : '0';
 
+// ▼自動肩幅推定（ユーザー未入力時のみ）
+if (userCm == null && updateGarmentTransform._shoulderPX > 0) {
+  const shoulderFrac = (updateGarmentTransform._shoulderPX / W);
+  // 経験則式：距離に応じて肩幅を概算（36〜60cm範囲）
+  userCm = Math.min(60, Math.max(36, 75 - shoulderFrac * 180));
+  console.log('[auto] 推定肩幅:', userCm.toFixed(1), 'cm');
+}
+      
       updateGarmentTransform();
       requestAnimationFrame(tick);
     }
-
+    
     function applyMirror(){
       els.video.classList.toggle('mirror', mirror);
       els.garment.classList.toggle('mirror', mirror);
