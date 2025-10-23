@@ -10,9 +10,9 @@
   "lacy-blouse": {
     "name": "レースヨークブラウス",
     "image": "public/garments/lacy-blouse.png",
-    "chest_cm": 58,
-    "shoulder_cm": 80,
-    "px_chest_hint": 420,
-    "anchorY": 0.33
+    "chest_cm": 52,
+    "shoulder_cm": 41,
+    "px_chest_hint": 820,
+    "anchorY": 0.305
   }
 }
