@@ -12,7 +12,7 @@
   "image": "public/garments/lacy-blouse.png",
   "chest_cm": 52,
   "shoulder_cm": 41,
-  "px_shoulder_hint": 915,  ←★これを追加
+  "px_shoulder_hint": 915,  
   "px_chest_hint": 820,
   "anchorY": 0.02
 }
