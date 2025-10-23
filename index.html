@@ -332,7 +332,8 @@ function updateGarmentTransform(){
 
   const w = garmentNatW * smS, h = garmentNatH * smS;
   const sForY = sDefault;
-  const desiredY = smY + autoDropPx - ((1 - sForY) * shoulderPX * 0.13);
+ const desiredY = smY + autoDropPx - ((1 - sForY) * shoulderPX * 0.13)
+  + ( (garmentConf.anchorY ?? ANCHOR_Y_FRAC) - ANCHOR_Y_FRAC ) * garmentNatH * smS;
 
   // アンカー位置（画像の襟～肩の重心を下に）※garments.jsonの anchorY を使う
   const anchorFrac  = (garmentConf.anchorY ?? ANCHOR_Y_FRAC);
