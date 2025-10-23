@@ -285,49 +285,72 @@
 
       const shoulderPX = updateGarmentTransform._shoulderPX || 0;
 
-      // A) 既定スケール（従来ロジック）
-      let sDefault = 1;
-      if (shoulderPX > 0) {
-        const pxHint = garmentConf.px_chest_hint || 980;
-        let chestPxA = shoulderPX;
-        if (garmentConf.chest_cm && garmentConf.shoulder_cm) {
-          chestPxA *= (garmentConf.chest_cm / garmentConf.shoulder_cm);
-        }
-        sDefault = (pxHint > 0) ? (chestPxA / pxHint) : 1;
+    // --- スケール/位置適用（A:画像肩幅px基準, B:ユーザーcm上書き）---
+function updateGarmentTransform(){
+  if (garmentNatW===0 || !garmentConf) return;
+
+  const shoulderPX = updateGarmentTransform._shoulderPX || 0;
+  const pxShoulderHint = garmentConf.px_shoulder_hint|0; // 画像内の肩幅px
+  const pxChestHint    = garmentConf.px_chest_hint|0;     // 既存があれば使う（フォールバック用）
+
+  // A) 画像の肩幅pxを基準にした既定スケール
+  let sDefault = 1;
+  if (shoulderPX > 0) {
+    if (pxShoulderHint > 0) {
+      // 画像肩幅pxでダイレクトに合わせる
+      sDefault = shoulderPX / pxShoulderHint;
+    } else if (pxChestHint > 0) {
+      // 旧ロジック（胸幅→肩幅換算）へのフォールバック
+      let chestPxA = shoulderPX;
+      if (garmentConf.chest_cm && garmentConf.shoulder_cm) {
+        chestPxA *= (garmentConf.chest_cm / garmentConf.shoulder_cm);
       }
-
-      // B) ユーザーcmスケール（任意）…あれば上書き。※Y補正には使わない
-      let sManual = null;
-      if (shoulderPX > 0 && userCm != null && garmentConf.chest_cm) {
-        const pxHint = garmentConf.px_chest_hint || 980;
-        const pxPerCm = shoulderPX / Math.max(1e-6, userCm);
-        const chestPxB = pxPerCm * garmentConf.chest_cm;
-        sManual = (pxHint > 0) ? (chestPxB / pxHint) : null;
-      }
-
-      const sTarget = (sManual != null) ? sManual : sDefault;
-      smS = (smS==null) ? sTarget : lerp(smS, sTarget, ALPHA_SCALE);
-
-      // 位置：AスケールでY補正を固定（上下の見た目を据え置き）
-      const W=els.stage.clientWidth, H=els.stage.clientHeight;
-      const cx=updateGarmentTransform._cx ?? (W/2);
-      const cy=updateGarmentTransform._cy ?? (H/2);
-      smX=(smX==null)?cx:lerp(smX,cx,ALPHA_POS);
-      smY=(smY==null)?cy:lerp(smY,cy,ALPHA_POS);
-
-      const w=garmentNatW*smS, h=garmentNatH*smS;
-      const sForY = sDefault; // ← Y補正は既定
-      const desiredY=smY + autoDropPx - ((1 - sForY) * shoulderPX * 0.13);
-      const anchorFrac = (garmentConf.anchorY ?? ANCHOR_Y_FRAC);
-      const anchorOffset = (0.5 - anchorFrac) * h;
-
-      const offX=parseInt(els.offX.value,10)||0;
-      const offY=parseInt(els.offY.value,10)||0;
-
-      els.garment.style.width=`${w}px`;
-      els.garment.style.left =`${smX+offX}px`;
-      els.garment.style.top  =`${desiredY+anchorOffset+offY}px`;
+      sDefault = chestPxA / pxChestHint;
     }
+  }
+
+  // B) ユーザーcm（任意入力）がある場合は肩幅で上書き
+  //   画像肩幅pxに対して、実肩幅→画像pxに換算して合わせる
+  let sManual = null;
+  if (shoulderPX > 0 && userCm != null) {
+    // userCm は「ユーザーの肩幅cm」。あなたの場合は 50 を入れる
+    const wantShoulderCm = garmentConf.shoulder_cm || userCm; // 服の設計肩幅があるなら優先
+    const pxPerCm = shoulderPX / Math.max(1e-6, userCm);      // カメラ検出: 1cmが画面上何pxか
+    const wantPx  = pxPerCm * wantShoulderCm;                 // その服の肩幅を画面pxに
+    if (pxShoulderHint > 0) {
+      sManual = wantPx / pxShoulderHint;
+    } else if (pxChestHint > 0 && garmentConf.chest_cm && garmentConf.shoulder_cm) {
+      // フォールバック：胸幅基準
+      const chestPxB = pxPerCm * garmentConf.chest_cm;
+      sManual = chestPxB / pxChestHint;
+    }
+  }
+
+  const sTarget = (sManual != null) ? sManual : sDefault;
+  smS = (smS==null) ? sTarget : lerp(smS, sTarget, ALPHA_SCALE);
+
+  // 位置は従来どおり（Yバイアスは sDefault で固定）
+  const W = els.stage.clientWidth, H = els.stage.clientHeight;
+  const cx = updateGarmentTransform._cx ?? (W/2);
+  const cy = updateGarmentTransform._cy ?? (H/2);
+  smX = (smX==null) ? cx : lerp(smX, cx, ALPHA_POS);
+  smY = (smY==null) ? cy : lerp(smY, cy, ALPHA_POS);
+
+  const w = garmentNatW * smS, h = garmentNatH * smS;
+  const sForY = sDefault;
+  const desiredY = smY + autoDropPx - ((1 - sForY) * shoulderPX * 0.13);
+
+  // アンカー位置（画像の襟～肩の重心を下に）※garments.jsonの anchorY を使う
+  const anchorFrac  = (garmentConf.anchorY ?? ANCHOR_Y_FRAC);
+  const anchorOffset= (0.5 - anchorFrac) * h;
+
+  const offX = parseInt(els.offX.value,10) || 0;
+  const offY = parseInt(els.offY.value,10) || 0;
+
+  els.garment.style.width = `${w}px`;
+  els.garment.style.left  = `${smX + offX}px`;
+  els.garment.style.top   = `${desiredY + anchorOffset + offY}px`;
+}
 
     async function tick(){
       if(!landmarker||!els.video||!els.video.videoWidth){ requestAnimationFrame(tick); return; }
